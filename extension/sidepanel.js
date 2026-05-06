@@ -3,6 +3,7 @@
 // setup guidance + ongoing chat with the user's Claude instance.
 
 const MAX_PAGE_CHARS = 40000;
+const AI_OFFICE_URL = "https://aioffice.app";
 
 const DEFAULT_ACTIONS = [
   { label: "Summarize",    icon: "📝", prompt: "Summarize this page in 3-5 sentences." },
@@ -12,19 +13,24 @@ const DEFAULT_ACTIONS = [
 ];
 
 let serverUrl = "http://127.0.0.1:7848";
+let accountToken = "";
+let currentStep = null;
 let pageContext = null;
 let messages = [];
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
-  const stored = await chrome.storage.local.get(["server_url", "configured"]);
+  const stored = await chrome.storage.local.get(["server_url", "account_token", "configured"]);
   if (stored.server_url) serverUrl = stored.server_url;
+  if (stored.account_token) accountToken = stored.account_token;
 
   if (stored.configured) {
     showChatScreen();
     await loadPageContext();
+    await loadCurrentStep();
   } else {
     document.getElementById("server-url-input").value = serverUrl;
+    if (stored.account_token) document.getElementById("account-token-input").value = stored.account_token;
     showSetupScreen();
   }
 
@@ -74,15 +80,19 @@ function handleTabChange() {
 // ── Connection ────────────────────────────────────────────────────────────────
 async function connect() {
   const urlVal = document.getElementById("server-url-input").value.trim();
+  const tokenVal = document.getElementById("account-token-input").value.trim();
   if (urlVal) serverUrl = urlVal;
+  if (tokenVal) accountToken = tokenVal;
+
   try {
     const res = await fetch(`${serverUrl}/status`, { signal: AbortSignal.timeout(4000) });
     const data = await res.json();
     if (data.connected !== false) {
-      await chrome.storage.local.set({ server_url: serverUrl, configured: true });
+      await chrome.storage.local.set({ server_url: serverUrl, account_token: accountToken, configured: true });
       chrome.runtime.sendMessage({ type: "set_server_url", url: serverUrl });
       showChatScreen();
       await loadPageContext();
+      await loadCurrentStep();
     } else {
       alert("Server responded but reported not connected. Check your Claude setup.");
     }
@@ -137,6 +147,48 @@ async function loadPageContext() {
   }
 }
 
+// ── Setup Step Context ────────────────────────────────────────────────────────
+async function loadCurrentStep() {
+  if (!accountToken) return;
+  try {
+    const res = await fetch(`${AI_OFFICE_URL}/api/extension/status?token=${accountToken}`, {
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    currentStep = data.current_step ?? null;
+    renderCurrentStep();
+  } catch { /* non-fatal */ }
+}
+
+function renderCurrentStep() {
+  let el = document.getElementById("current-step-bar");
+  if (!currentStep) {
+    if (el) el.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "current-step-bar";
+    el.className = "current-step-bar";
+    const contextBar = document.querySelector(".context-bar");
+    if (contextBar) contextBar.after(el);
+  }
+  el.innerHTML = `<span class="step-label">Step:</span> <span class="step-title">${currentStep.title}</span>`;
+}
+
+async function markStepComplete(stepId) {
+  if (!accountToken) return;
+  await fetch(`${AI_OFFICE_URL}/api/steps/${stepId}?token=${accountToken}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "complete" })
+  });
+  currentStep = null;
+  renderCurrentStep();
+  await loadCurrentStep();
+}
+
 // ── Chat ──────────────────────────────────────────────────────────────────────
 async function sendMessage() {
   const input = document.getElementById("user-input");
@@ -153,11 +205,15 @@ async function sendMessage() {
   sendBtn.disabled = true;
   const thinkingEl = appendMessage("thinking", "Thinking...");
 
+  const stepContext = currentStep
+    ? { id: currentStep.id, title: currentStep.title, description: currentStep.description }
+    : null;
+
   try {
     const res = await fetch(`${serverUrl}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, page_context: pageContext, history: messages.slice(-10) })
+      body: JSON.stringify({ message: text, page_context: pageContext, history: messages.slice(-10), current_step: stepContext })
     });
     thinkingEl.remove();
     if (!res.ok) throw new Error(`Server error ${res.status}`);

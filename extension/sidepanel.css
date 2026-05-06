@@ -36,6 +36,7 @@ body {
 .setup-inner p { color: #888; font-size: 12px; line-height: 1.6; }
 .setup-inner a { color: #5b8def; }
 .setup-label { font-size: 11px; color: #666; align-self: flex-start; }
+.setup-label-hint { color: #444; font-weight: 400; }
 .setup-inner input {
   background: #1e1e26;
   border: 1px solid #2e2e3e;
@@ -51,6 +52,20 @@ body {
 
 /* ── Chat Screen ── */
 #chat-screen { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+
+/* ── Current Step Bar ── */
+.current-step-bar {
+  padding: 5px 10px;
+  background: #1a1a2e;
+  border-bottom: 1px solid #2a2a4e;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.step-label { color: #5b8def; font-weight: 600; flex-shrink: 0; }
+.step-title { color: #c0c0d8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Context Bar ── */
 .context-bar {

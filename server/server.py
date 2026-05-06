@@ -75,17 +75,27 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/chat":
             message = body.get("message", "")
             page_context = body.get("page_context", {})
+            current_step = body.get("current_step")
 
-            # Build prompt with page context
-            page_text = ""
+            # Build context sections
+            parts = [message]
+
+            if current_step:
+                parts.append(
+                    f"\n\n[AI Office setup context]\n"
+                    f"The user is currently working on setup step: {current_step.get('title', '')}\n"
+                    f"{current_step.get('description', '')}\n"
+                    f"Give specific guidance relevant to this step if the user's question relates to it."
+                )
+
             if page_context:
-                page_text = (
+                parts.append(
                     f"\n\nCurrent page: {page_context.get('title', '')} "
                     f"({page_context.get('url', '')})\n"
                     f"Page content:\n{page_context.get('text', '')[:8000]}"
                 )
 
-            full_prompt = f"{message}{page_text}"
+            full_prompt = "".join(parts)
             response = run_claude(full_prompt)
             self.send_json(200, {"response": response})
         else:
