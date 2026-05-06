@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <!-- Setup screen: server URL + first-run -->
+  <!-- Setup screen: server URL + account token -->
   <div id="setup-screen">
     <div class="setup-inner">
       <div class="setup-logo">✦</div>
@@ -14,8 +14,10 @@
       <p>Connect to your local Claude instance to get started.</p>
       <label class="setup-label">Local server URL</label>
       <input type="text" id="server-url-input" placeholder="http://127.0.0.1:7848" autocomplete="off">
+      <label class="setup-label" style="margin-top:8px">AI Office token <span class="setup-label-hint">(from your dashboard)</span></label>
+      <input type="text" id="account-token-input" placeholder="Paste your token here" autocomplete="off">
       <button id="connect-btn">Connect</button>
-      <p class="hint">The AI Office companion server must be running on your machine.</p>
+      <p class="hint">Get your token at <a href="https://aioffice.app/dashboard" target="_blank">aioffice.app/dashboard</a></p>
     </div>
   </div>
 
