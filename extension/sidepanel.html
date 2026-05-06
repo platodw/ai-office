@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI Office</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <!-- Setup screen: server URL + first-run -->
+  <div id="setup-screen">
+    <div class="setup-inner">
+      <div class="setup-logo">✦</div>
+      <h2>AI Office</h2>
+      <p>Connect to your local Claude instance to get started.</p>
+      <label class="setup-label">Local server URL</label>
+      <input type="text" id="server-url-input" placeholder="http://127.0.0.1:7848" autocomplete="off">
+      <button id="connect-btn">Connect</button>
+      <p class="hint">The AI Office companion server must be running on your machine.</p>
+    </div>
+  </div>
+
+  <!-- Main panel -->
+  <div id="chat-screen" class="hidden">
+
+    <!-- Current page context -->
+    <div class="context-bar">
+      <div class="page-context-pill">
+        <img id="page-favicon" class="page-favicon" src="" alt="" style="display:none">
+        <span id="page-title" class="page-title">No page loaded</span>
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="quick-actions">
+      <div id="action-btns"></div>
+      <button id="add-action-btn" title="Manage actions">+</button>
+    </div>
+
+    <!-- Actions editor (hidden by default) -->
+    <div id="actions-editor" class="hidden">
+      <div class="editor-header">
+        <span>Actions</span>
+        <button id="close-editor-btn">✕</button>
+      </div>
+      <div id="actions-list"></div>
+      <div class="new-action-form">
+        <div class="new-action-icon-label-row">
+          <div class="icon-picker-wrap"><input type="text" id="new-action-icon" placeholder="🔹" maxlength="8" title="Click to pick an emoji" readonly></div>
+          <input type="text" id="new-action-label" placeholder="Label" maxlength="24">
+        </div>
+        <textarea id="new-action-prompt" placeholder="Prompt" rows="3"></textarea>
+        <button id="save-action-btn">Add Action</button>
+      </div>
+    </div>
+
+    <div id="messages" class="messages"></div>
+
+    <div class="input-row">
+      <textarea id="user-input" placeholder="Ask something..." rows="2"></textarea>
+      <button id="send-btn" title="Send">&#x27A4;</button>
+    </div>
+    <div class="bottom-bar">
+      <button id="clear-btn">Clear chat</button>
+      <div class="bottom-bar-right">
+        <button id="reload-context-btn" title="Re-read current page">&#x21BA; Refresh</button>
+        <div id="mcp-dot" class="mcp-dot" title="Server status"></div>
+        <button id="settings-btn" title="Settings">&#x2699;</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
