@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { STEP_TEMPLATES } from "@/lib/steps-template";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -51,7 +52,13 @@ export async function GET(request: Request) {
 
     if (steps) {
       allSteps = steps;
-      currentStep = steps.find((s: { status: string }) => s.status === "pending" || s.status === "in_progress") ?? null;
+      const raw = steps.find((s: { status: string }) => s.status === "pending" || s.status === "in_progress") ?? null;
+      if (raw) {
+        const tpl = STEP_TEMPLATES.find(t => t.title === (raw as any).title);
+        currentStep = tpl
+          ? { ...raw, why: tpl.why, click_steps: tpl.click_steps, notes: tpl.notes, links: tpl.links }
+          : raw;
+      }
     }
   }
 
