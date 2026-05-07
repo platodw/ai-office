@@ -320,6 +320,14 @@ function renderMarkdown(text) {
     return `\x00P${protected_.length - 1}\x00`;
   });
 
+  // Markdown links [text](url) — process before bare URL detection
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, label, url) => {
+    const safeHref = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const safeLabel = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    protected_.push({ type: 'url', content: `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>` });
+    return `\x00P${protected_.length - 1}\x00`;
+  });
+
   // Full URLs with protocol
   s = s.replace(/https?:\/\/[^\s<>")\]]+/g, url => {
     const cleanUrl = url.replace(/[.,;:!?)\]]+$/, "");
