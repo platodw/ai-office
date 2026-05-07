@@ -3,7 +3,7 @@
 // setup guidance + ongoing chat with the user's Claude instance.
 
 const MAX_PAGE_CHARS = 40000;
-const AI_OFFICE_URL = "https://aioffice.app";
+const AI_OFFICE_URL_DEFAULT = "https://aioffice.app";
 
 const DEFAULT_ACTIONS = [
   { label: "Summarize",    icon: "📝", prompt: "Summarize this page in 3-5 sentences." },
@@ -13,6 +13,7 @@ const DEFAULT_ACTIONS = [
 ];
 
 let serverUrl = "http://127.0.0.1:7848";
+let webAppUrl = AI_OFFICE_URL_DEFAULT;
 let accountToken = "";
 let currentStep = null;
 let guideSteps = [];
@@ -23,8 +24,9 @@ let messages = [];
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
-  const stored = await chrome.storage.local.get(["server_url", "account_token", "configured"]);
+  const stored = await chrome.storage.local.get(["server_url", "web_app_url", "account_token", "configured"]);
   if (stored.server_url) serverUrl = stored.server_url;
+  if (stored.web_app_url) webAppUrl = stored.web_app_url;
   if (stored.account_token) accountToken = stored.account_token;
 
   if (stored.configured) {
@@ -33,6 +35,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadCurrentStep();
   } else {
     document.getElementById("server-url-input").value = serverUrl;
+    document.getElementById("web-app-url-input").value = webAppUrl;
     if (stored.account_token) document.getElementById("account-token-input").value = stored.account_token;
     showSetupScreen();
   }
@@ -47,7 +50,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     pageContext = null;
     await loadPageContext();
   });
-  document.getElementById("settings-btn").addEventListener("click", () => showSetupScreen());
+  document.getElementById("settings-btn").addEventListener("click", () => {
+    document.getElementById("server-url-input").value = serverUrl;
+    document.getElementById("web-app-url-input").value = webAppUrl;
+    document.getElementById("account-token-input").value = accountToken;
+    showSetupScreen();
+  });
   document.getElementById("add-action-btn").addEventListener("click", toggleEditor);
   document.getElementById("close-editor-btn").addEventListener("click", toggleEditor);
   document.getElementById("save-action-btn").addEventListener("click", saveNewAction);
@@ -95,15 +103,17 @@ function appendNavMarker(title) {
 // ── Connection ────────────────────────────────────────────────────────────────
 async function connect() {
   const urlVal = document.getElementById("server-url-input").value.trim();
+  const webUrlVal = document.getElementById("web-app-url-input").value.trim();
   const tokenVal = document.getElementById("account-token-input").value.trim();
   if (urlVal) serverUrl = urlVal;
+  if (webUrlVal) webAppUrl = webUrlVal.replace(/\/$/, "");
   if (tokenVal) accountToken = tokenVal;
 
   try {
     const res = await fetch(`${serverUrl}/status`, { signal: AbortSignal.timeout(4000) });
     const data = await res.json();
     if (data.connected !== false) {
-      await chrome.storage.local.set({ server_url: serverUrl, account_token: accountToken, configured: true });
+      await chrome.storage.local.set({ server_url: serverUrl, web_app_url: webAppUrl, account_token: accountToken, configured: true });
       chrome.runtime.sendMessage({ type: "set_server_url", url: serverUrl });
       showChatScreen();
       await loadPageContext();
@@ -166,7 +176,7 @@ async function loadPageContext() {
 async function loadCurrentStep() {
   if (!accountToken) return;
   try {
-    const res = await fetch(`${AI_OFFICE_URL}/api/extension/status?token=${accountToken}`, {
+    const res = await fetch(`${webAppUrl}/api/extension/status?token=${accountToken}`, {
       signal: AbortSignal.timeout(5000)
     });
     if (!res.ok) return;
@@ -197,7 +207,7 @@ function renderCurrentStep() {
 
 async function markStepComplete(stepId) {
   if (!accountToken) return;
-  await fetch(`${AI_OFFICE_URL}/api/steps/${stepId}?token=${accountToken}`, {
+  await fetch(`${webAppUrl}/api/steps/${stepId}?token=${accountToken}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status: "complete" })
