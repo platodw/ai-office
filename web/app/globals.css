@@ -5,37 +5,37 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background-color: #0f0f14;
-  color: #e2e2e8;
-  font-family: system-ui, -apple-system, sans-serif;
+  background-color: #faf6ef;
+  color: #1f1a14;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
-::selection { background: #2a5cc840; }
+::selection { background: #8a6a2e28; }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a50; }
+::-webkit-scrollbar-thumb { background: #ddd1bd; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #c8b89a; }
 
 /* Code blocks */
 pre, code {
-  font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-family: var(--font-mono), ui-monospace, Consolas, monospace;
   font-size: 13px;
 }
 pre {
-  background: #141418;
-  border: 1px solid #2a2a3e;
+  background: #f0e9dc;
+  border: 1px solid #ddd1bd;
   border-radius: 8px;
   padding: 14px 16px;
   overflow-x: auto;
   line-height: 1.55;
 }
 code:not(pre code) {
-  background: #1e1e28;
-  border: 1px solid #2a2a3e;
+  background: #ebe1c9;
+  border: 1px solid #ddd1bd;
   border-radius: 4px;
   padding: 1px 6px;
   font-size: 12.5px;
@@ -43,6 +43,6 @@ code:not(pre code) {
 
 /* Focus ring */
 :focus-visible {
-  outline: 2px solid #5b8def;
+  outline: 2px solid #8a6a2e;
   outline-offset: 2px;
 }

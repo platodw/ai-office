@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 56" width="240" height="56">
+  <g transform="translate(28 28)">
+    <rect x="-2.2" y="-22" width="4.4" height="44" rx="2.2" fill="#1f1a14"></rect>
+    <rect x="-2.2" y="-22" width="4.4" height="44" rx="2.2" fill="#1f1a14" transform="rotate(45)"></rect>
+    <rect x="-2.2" y="-22" width="4.4" height="44" rx="2.2" fill="#1f1a14" transform="rotate(90)"></rect>
+    <rect x="-2.2" y="-22" width="4.4" height="44" rx="2.2" fill="#1f1a14" transform="rotate(135)"></rect>
+    <circle r="6" fill="#8a6a2e"></circle>
+  </g>
+  <text x="68" y="35" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="24" letter-spacing="-0.5" fill="#1f1a14">AI Office</text>
+</svg>

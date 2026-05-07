@@ -1,0 +1,68 @@
+/* AI Office — Brand Tokens
+ * Direction: Practical Bronze (cream + ink + bronze accent)
+ * For use in Chrome extension, marketing site, decks
+ */
+
+:root {
+  /* Surfaces (warm cream) */
+  --ao-bg:        #faf6ef;   /* primary background */
+  --ao-bg-2:      #f0e9dc;   /* alt surface, hover, quiet panels */
+  --ao-bg-3:      #ffffff;   /* pure white for input fields, cards on bg */
+
+  /* Ink (warm neutrals) */
+  --ao-ink:       #1f1a14;   /* primary text, headlines */
+  --ao-ink-2:     #3d342a;   /* body text */
+  --ao-ink-soft:  #8a7d6e;   /* secondary, captions, placeholder */
+  --ao-rule:      #ddd1bd;   /* hairlines, borders */
+
+  /* Accent (bronze + walnut) */
+  --ao-accent:        #8a6a2e;  /* primary accent: links, focus, CTAs */
+  --ao-accent-hover:  #6f5424;
+  --ao-accent-2:      #5a3f1c;  /* deep walnut: emphasis, headers on accent */
+  --ao-accent-soft:   #ebe1c9;  /* badge background, selection */
+
+  /* Status */
+  --ao-ok:    #3a8a52;
+  --ao-warn:  #c08a2e;
+  --ao-err:   #b04545;
+
+  /* Typography */
+  --ao-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ao-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+
+  /* Type scale */
+  --ao-text-xs:    11px;
+  --ao-text-sm:    12.5px;
+  --ao-text-base:  14px;
+  --ao-text-md:    16px;
+  --ao-text-lg:    20px;
+  --ao-text-xl:    32px;
+  --ao-text-2xl:   54px;
+  --ao-text-3xl:   78px;
+
+  /* Spacing scale (4px base) */
+  --ao-space-1: 4px;
+  --ao-space-2: 8px;
+  --ao-space-3: 12px;
+  --ao-space-4: 16px;
+  --ao-space-5: 24px;
+  --ao-space-6: 32px;
+  --ao-space-8: 56px;
+
+  /* Radii */
+  --ao-radius-sm: 6px;
+  --ao-radius:    8px;
+  --ao-radius-md: 10px;
+  --ao-radius-lg: 14px;
+  --ao-radius-pill: 999px;
+
+  /* Shadows */
+  --ao-shadow-sm: 0 1px 2px rgba(31, 26, 20, 0.06);
+  --ao-shadow:    0 4px 12px -4px rgba(31, 26, 20, 0.12);
+  --ao-shadow-lg: -30px 40px 80px -30px rgba(138, 106, 46, 0.22), 0 1px 3px rgba(0, 0, 0, 0.06);
+
+  /* Motion */
+  --ao-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ao-dur-fast: 120ms;
+  --ao-dur:      180ms;
+}

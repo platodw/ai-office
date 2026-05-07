@@ -19,12 +19,11 @@ export default async function GuidePage() {
   if (!guide) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-10 text-center">
-        <div className="text-4xl mb-3">📋</div>
-        <h1 className="text-xl font-bold text-white mb-2">No guide yet</h1>
-        <p className="text-muted text-sm mb-5">Complete the setup questionnaire to generate your personalized guide.</p>
+        <h1 className="text-xl font-semibold text-text mb-2">No guide yet</h1>
+        <p className="text-muted text-sm mb-5">Complete the setup questionnaire to get your personalized guide.</p>
         <Link
           href="/onboarding"
-          className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
+          className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-text font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
         >
           Start questionnaire
         </Link>
@@ -54,7 +53,7 @@ export default async function GuidePage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-white mb-1">Your Setup Guide</h1>
+          <h1 className="text-xl font-bold text-text mb-1">Your Setup Guide</h1>
           <p className="text-muted text-sm">{completedSteps} of {totalSteps} steps complete</p>
         </div>
         <Link

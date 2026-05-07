@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { LogoMark } from "@/components/logo-mark";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -28,11 +29,10 @@ export default function SignupPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
-          <div className="text-4xl mb-3">✉️</div>
-          <h1 className="text-xl font-bold text-white mb-2">Check your email</h1>
+          <h1 className="text-xl font-semibold text-text mb-2">Check your email.</h1>
           <p className="text-muted text-sm">
             We sent a confirmation link to <span className="text-text">{email}</span>.
-            Click it to activate your account, then come back here to sign in.
+            Click it to activate your account, then come back to sign in.
           </p>
           <Link href="/login" className="mt-6 inline-block text-primary text-sm hover:underline">
             Back to sign in
@@ -46,9 +46,9 @@ export default function SignupPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-4xl mb-3">✦</div>
-          <h1 className="text-xl font-bold text-white">AI Office</h1>
-          <p className="text-muted text-sm mt-1">Create your account to get started</p>
+          <div className="flex justify-center mb-3"><LogoMark size={40} /></div>
+          <h1 className="text-xl font-semibold text-text tracking-tight">AI Office</h1>
+          <p className="text-muted text-sm mt-1">Create your account.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -61,7 +61,7 @@ export default function SignupPage() {
               placeholder="you@example.com"
               required
               autoFocus
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2.5 text-text text-sm placeholder-subtle focus:outline-none focus:border-primary transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2.5 text-text text-sm placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
           </div>
           <div>
@@ -73,12 +73,12 @@ export default function SignupPage() {
               placeholder="••••••••"
               required
               minLength={8}
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2.5 text-text text-sm placeholder-subtle focus:outline-none focus:border-primary transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2.5 text-text text-sm placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
           </div>
 
           {error && (
-            <div className="bg-red-950/40 border border-red-800/50 rounded-lg px-3 py-2 text-red-400 text-xs">
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-error text-xs">
               {error}
             </div>
           )}

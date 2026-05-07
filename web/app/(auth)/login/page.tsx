@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { LogoMark } from "@/components/logo-mark";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -23,8 +24,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-4xl mb-3">✦</div>
-          <h1 className="text-xl font-bold text-white">AI Office</h1>
+          <div className="flex justify-center mb-3"><LogoMark size={40} /></div>
+          <h1 className="text-xl font-semibold text-text tracking-tight">AI Office</h1>
           <p className="text-muted text-sm mt-1">Sign in to your account</p>
         </div>
 
@@ -38,7 +39,7 @@ export default function LoginPage() {
               placeholder="you@example.com"
               required
               autoFocus
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2.5 text-text text-sm placeholder-subtle focus:outline-none focus:border-primary transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2.5 text-text text-sm placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
           </div>
           <div>
@@ -49,12 +50,12 @@ export default function LoginPage() {
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2.5 text-text text-sm placeholder-subtle focus:outline-none focus:border-primary transition-colors"
+              className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2.5 text-text text-sm placeholder-muted focus:outline-none focus:border-primary transition-colors"
             />
           </div>
 
           {error && (
-            <div className="bg-red-950/40 border border-red-800/50 rounded-lg px-3 py-2 text-red-400 text-xs">
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-error text-xs">
               {error}
             </div>
           )}

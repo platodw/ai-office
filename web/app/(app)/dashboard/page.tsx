@@ -44,7 +44,7 @@ export default async function DashboardPage() {
     <div className="max-w-3xl mx-auto px-6 py-10">
       {/* Greeting */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Hey {firstName} 👋</h1>
+        <h1 className="text-2xl font-semibold text-text tracking-tight">Hello, {firstName}.</h1>
         <p className="text-muted text-sm mt-1">
           {guide
             ? `${completedSteps} of ${totalSteps} setup steps complete`
@@ -55,12 +55,11 @@ export default async function DashboardPage() {
       {/* No guide yet */}
       {!guide && (
         <div className="bg-surface border border-border rounded-xl p-8 text-center mb-6">
-          <div className="text-4xl mb-3">📋</div>
-          <h2 className="text-base font-semibold text-white mb-2">Generate your setup guide</h2>
-          <p className="text-muted text-sm mb-5">Answer a few questions and we&apos;ll build a personalized Claude setup guide for your workflow.</p>
+          <h2 className="text-base font-semibold text-text mb-2">Generate your setup guide</h2>
+          <p className="text-muted text-sm mb-5">Answer a few questions and we&apos;ll build a personalized Claude setup guide for you.</p>
           <Link
             href="/onboarding"
-            className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
+            className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-text font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
           >
             Get started
           </Link>
@@ -71,7 +70,7 @@ export default async function DashboardPage() {
       {guide && steps && (
         <div className="bg-surface border border-border rounded-xl p-5 mb-6">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-white">Setup progress</span>
+            <span className="text-sm font-semibold text-text">Setup progress</span>
             <span className="text-sm text-muted">{progressPct}%</span>
           </div>
           <div className="w-full h-2 bg-surface-2 rounded-full overflow-hidden mb-4">
@@ -104,7 +103,7 @@ export default async function DashboardPage() {
       {/* Section overview */}
       {guide && Object.keys(bySection).length > 0 && (
         <div className="bg-surface border border-border rounded-xl p-5 mb-6">
-          <h2 className="text-sm font-semibold text-white mb-3">Progress by section</h2>
+          <h2 className="text-sm font-semibold text-text mb-3">Progress by section</h2>
           <div className="space-y-2">
             {Object.entries(bySection).map(([section, sectionSteps]) => {
               const done = (sectionSteps as StepRow[]).filter(s => s.status === "complete" || s.status === "skipped").length;
@@ -128,7 +127,7 @@ export default async function DashboardPage() {
 
       {/* Extension connection */}
       <div className="bg-surface border border-border rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-white mb-1">Connect the Chrome extension</h2>
+        <h2 className="text-sm font-semibold text-text mb-1">Connect the Chrome extension</h2>
         <p className="text-muted text-sm mb-4">
           Paste this token into the AI Office extension to link it to your account.
           The extension will show your current setup step as you browse.
