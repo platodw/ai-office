@@ -80,6 +80,10 @@ body {
   padding: 8px 14px;
   border-bottom: 1px solid var(--ao-rule);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 .page-context-pill {
   display: inline-flex;
@@ -88,8 +92,9 @@ body {
   background: var(--ao-bg-2);
   border-radius: var(--ao-radius-pill);
   padding: 4px 11px 4px 8px;
-  max-width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
 }
 .page-favicon { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; object-fit: contain; }
 .page-title {
@@ -98,6 +103,50 @@ body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   min-width: 0;
 }
+
+/* Active step pill — bronze accent, inline with page pill */
+.step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ao-accent-soft);
+  border: 1px solid var(--ao-accent);
+  border-radius: var(--ao-radius-pill);
+  padding: 3px 4px 3px 9px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+}
+.step-pill-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ao-accent);
+  flex-shrink: 0;
+}
+.step-pill-title {
+  font-size: var(--ao-text-xs);
+  color: var(--ao-ink);
+  font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+.step-complete-btn {
+  background: var(--ao-accent);
+  border: none;
+  color: #fff;
+  border-radius: 50%;
+  width: 18px; height: 18px;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition: background var(--ao-dur-fast) var(--ao-ease);
+}
+.step-complete-btn:hover { background: var(--ao-accent-hover); }
 
 /* ── Quick Actions ── */
 .quick-actions {

@@ -59,6 +59,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("add-action-btn").addEventListener("click", toggleEditor);
   document.getElementById("close-editor-btn").addEventListener("click", toggleEditor);
   document.getElementById("save-action-btn").addEventListener("click", saveNewAction);
+  document.getElementById("step-complete-btn").addEventListener("click", () => {
+    if (currentStep) handleMarkComplete();
+  });
+
+  // Open links in a new tab via chrome.tabs.create (target=_blank in side panels is unreliable)
+  document.getElementById("messages").addEventListener("click", (e) => {
+    const a = e.target.closest("a[href^='http']");
+    if (!a) return;
+    e.preventDefault();
+    chrome.tabs.create({ url: a.href });
+  });
 
   chrome.runtime.sendMessage({ type: "get_status" }, (res) => {
     if (res) { serverUrl = res.serverUrl || serverUrl; updateMcpDot(res.connected); }
@@ -190,31 +201,50 @@ async function loadCurrentStep() {
 }
 
 function renderCurrentStep() {
-  let el = document.getElementById("current-step-bar");
+  const pill = document.getElementById("step-pill");
+  const titleEl = document.getElementById("step-pill-title");
+  if (!pill || !titleEl) return;
   if (!currentStep) {
-    if (el) el.remove();
+    pill.classList.add("hidden");
     return;
   }
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "current-step-bar";
-    el.className = "current-step-bar";
-    const contextBar = document.querySelector(".context-bar");
-    if (contextBar) contextBar.after(el);
-  }
-  el.innerHTML = `<span class="step-label">Step:</span> <span class="step-title">${currentStep.title}</span>`;
+  const num = currentStep.step_number ? `${currentStep.step_number}. ` : "";
+  titleEl.textContent = `${num}${currentStep.title}`;
+  titleEl.title = currentStep.title;
+  pill.classList.remove("hidden");
 }
 
 async function markStepComplete(stepId) {
-  if (!accountToken) return;
-  await fetch(`${webAppUrl}/api/steps/${stepId}?token=${accountToken}`, {
+  if (!accountToken) throw new Error("No account token configured");
+  const res = await fetch(`${webAppUrl}/api/steps/${stepId}?token=${accountToken}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status: "complete" })
   });
+  if (!res.ok) throw new Error(`Server returned ${res.status}`);
   currentStep = null;
   renderCurrentStep();
   await loadCurrentStep();
+}
+
+// ── Step completion ──────────────────────────────────────────────────────────
+const MARK_COMPLETE_PATTERN = /\b(mark|set|check off|finish)\s+(this\s+)?(step\s+)?(as\s+)?(complete|completed|done|finished)\b/i;
+
+async function handleMarkComplete() {
+  if (!currentStep) {
+    appendMessage("assistant", "No active step to mark complete.");
+    return;
+  }
+  const completedTitle = currentStep.title;
+  const stepId = currentStep.id;
+  appendMessage("assistant", `Marking "${completedTitle}" complete…`);
+  try {
+    await markStepComplete(stepId);
+    const next = currentStep ? `Now on Step ${currentStep.step_number}: ${currentStep.title}.` : "All steps complete.";
+    appendMessage("assistant", `✓ Marked "${completedTitle}" complete. ${next}`);
+  } catch (err) {
+    appendMessage("error", `Could not mark step complete: ${err.message}`);
+  }
 }
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
@@ -228,6 +258,12 @@ async function sendMessage() {
 
   appendMessage("user", text);
   messages.push({ role: "user", content: text });
+
+  // Intent: mark current step complete
+  if (MARK_COMPLETE_PATTERN.test(text) && currentStep) {
+    await handleMarkComplete();
+    return;
+  }
 
   const sendBtn = document.getElementById("send-btn");
   sendBtn.disabled = true;
