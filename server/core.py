@@ -55,7 +55,7 @@ def detect_route() -> dict:
     if claude_path:
         return {
             "mode": "claude_desktop",
-            "label": "Connected through Claude Desktop",
+            "label": "Claude Desktop is connected. Using your Claude subscription.",
             "ready": True,
             "claude_path": claude_path,
             "version": VERSION,
@@ -64,14 +64,14 @@ def detect_route() -> dict:
     if os.environ.get("ANTHROPIC_API_KEY"):
         return {
             "mode": "anthropic_api",
-            "label": "Using your Anthropic API key",
+            "label": "Using your Anthropic API key.",
             "ready": False,
             "version": VERSION,
         }
 
     return {
         "mode": "not_connected",
-        "label": "Install Claude Desktop to get started",
+        "label": "Install Claude Desktop to get started.",
         "ready": False,
         "version": VERSION,
     }

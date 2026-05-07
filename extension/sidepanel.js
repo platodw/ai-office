@@ -159,27 +159,22 @@ function renderSetupStatus() {
   const text = document.getElementById("setup-status-text");
   if (!banner || !text) return;
   let state = "checking";
-  let label = companionStatus.label || "Checking your setup…";
   let hint = "";
 
   if (!companionStatus.connected) {
     state = "error";
-    label = "Companion not running";
     hint = NOT_CONNECTED_HINT;
   } else if (companionStatus.mode === "claude_desktop") {
     state = "ready";
-    label = "Claude Desktop is connected — you'll use your Claude subscription.";
   } else if (companionStatus.mode === "anthropic_api") {
     state = companionStatus.ready ? "ready" : "warning";
-    label = "Connected — using your Anthropic API key.";
   } else if (companionStatus.mode === "not_connected") {
     state = "warning";
-    label = companionStatus.label || "Install Claude Desktop to get started.";
     hint = NOT_CONNECTED_HINT;
   }
 
   banner.dataset.state = state;
-  text.textContent = label;
+  text.textContent = companionStatus.label || "Checking your setup…";
   setSetupHint(hint);
 }
 
