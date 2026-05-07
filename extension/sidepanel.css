@@ -286,6 +286,29 @@ body {
 .message.thinking {
   color: var(--ao-ink-soft); font-style: italic;
   font-size: var(--ao-text-xs); padding: 4px 2px; background: none;
+  display: flex; align-items: center; gap: 8px;
+}
+.thinking-elapsed {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: var(--ao-ink-soft);
+  opacity: 0.7;
+}
+.thinking-cancel {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--ao-rule);
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--ao-ink-soft);
+  font-size: 11px;
+  cursor: pointer;
+  font-style: normal;
+  transition: all 120ms ease;
+}
+.thinking-cancel:hover {
+  border-color: var(--ao-err);
+  color: var(--ao-err);
 }
 /* ── Input Row ── */
 .input-row {

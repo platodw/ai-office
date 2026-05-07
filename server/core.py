@@ -7,9 +7,13 @@ build a prompt, and run it through the Claude CLI.
 """
 
 import os
+import queue
 import subprocess
+import threading
+import time
+from typing import Callable, Optional
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 SYSTEM_PROMPT = """You are the AI Office assistant — a helpful guide embedded in the user's browser.
 Your job is to help them set up Claude Desktop and get real value from it.
@@ -165,14 +169,22 @@ def build_prompt(
     return "".join(parts)
 
 
-def run_claude(prompt: str, claude_bin: str) -> str:
+DEFAULT_TIMEOUT_SEC = 300  # 5 minutes
+TIMEOUT_FRIENDLY = (
+    "Your question took longer than 5 minutes to answer. "
+    "Try breaking it into smaller pieces or shortening it."
+)
+
+
+def run_claude(prompt: str, claude_bin: str, timeout: int = DEFAULT_TIMEOUT_SEC) -> str:
+    """One-shot fallback used by the HTTP server. Blocks until done."""
     try:
         result = subprocess.run(
             [claude_bin, "-p", "--permission-mode", "bypassPermissions", prompt],
             capture_output=True,
             text=True,
             encoding="utf-8",
-            timeout=120,
+            timeout=timeout,
         )
         output = result.stdout.strip()
         if not output and result.stderr.strip():
@@ -180,12 +192,12 @@ def run_claude(prompt: str, claude_bin: str) -> str:
                 [claude_bin, "-p", prompt],
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=timeout,
             )
             output = result2.stdout.strip() or result2.stderr.strip()
         return output or "(no response)"
     except subprocess.TimeoutExpired:
-        return "Request timed out. Try a shorter question."
+        return TIMEOUT_FRIENDLY
     except FileNotFoundError:
         return (
             f"Claude CLI not found at '{claude_bin}'. "
@@ -193,6 +205,90 @@ def run_claude(prompt: str, claude_bin: str) -> str:
         )
     except Exception as e:
         return f"Server error: {e}"
+
+
+class StreamCancelled(Exception):
+    """Raised when the caller signals cancellation."""
+
+
+def stream_claude(
+    prompt: str,
+    claude_bin: str,
+    on_chunk: Callable[[str], None],
+    timeout: int = DEFAULT_TIMEOUT_SEC,
+    is_cancelled: Optional[Callable[[], bool]] = None,
+) -> str:
+    """Run `claude -p` and stream stdout to on_chunk as it arrives.
+
+    Uses a reader thread so we can poll for timeout and cancellation. Returns
+    the full assembled output on success. Raises subprocess.TimeoutExpired if
+    we hit the deadline, StreamCancelled if the caller flips the cancel flag.
+    """
+    proc = subprocess.Popen(
+        [claude_bin, "-p", "--permission-mode", "bypassPermissions", prompt],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        bufsize=1,  # line-buffered
+    )
+
+    q: "queue.Queue[tuple[str, Optional[str]]]" = queue.Queue()
+
+    def reader(stream, kind):
+        try:
+            while True:
+                # Read chunks rather than full lines so single-line outputs
+                # still stream incrementally. claude -p tends to emit lines,
+                # but we don't want to depend on it.
+                chunk = stream.read(256)
+                if not chunk:
+                    break
+                q.put((kind, chunk))
+        except Exception as e:
+            q.put(("err", str(e)))
+        finally:
+            q.put((f"{kind}_eof", None))
+
+    threading.Thread(target=reader, args=(proc.stdout, "out"), daemon=True).start()
+    threading.Thread(target=reader, args=(proc.stderr, "err_out"), daemon=True).start()
+
+    deadline = time.monotonic() + timeout
+    pieces: list[str] = []
+    out_done = False
+    err_done = False
+
+    try:
+        while not (out_done and err_done):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                proc.kill()
+                raise subprocess.TimeoutExpired(claude_bin, timeout)
+            if is_cancelled and is_cancelled():
+                proc.kill()
+                raise StreamCancelled()
+            try:
+                kind, val = q.get(timeout=min(remaining, 0.5))
+            except queue.Empty:
+                continue
+            if kind == "out" and val:
+                pieces.append(val)
+                on_chunk(val)
+            elif kind == "out_eof":
+                out_done = True
+            elif kind == "err_out":
+                # Captured for debugging but not streamed to the user.
+                pass
+            elif kind == "err_out_eof":
+                err_done = True
+            elif kind == "err":
+                raise RuntimeError(val or "stream read error")
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+    proc.wait(timeout=5)
+    return "".join(pieces).strip()
 
 
 def handle_chat(payload: dict) -> dict:

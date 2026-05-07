@@ -13,11 +13,19 @@ Wire protocol:
 Request types we accept:
   { "type": "status" }
   { "type": "chat", "message": "...", "page_context": {...}, ... }
+  { "type": "cancel" }            (sent on a separate post during streaming)
+
+Streaming response shape (multiple messages per chat request):
+  { "type": "chat_chunk", "text": "..." }
+  { "type": "chat_done", "mode": "..." }
+  { "type": "chat_error", "error": "..." }
 """
 
 import json
 import struct
+import subprocess
 import sys
+import threading
 import traceback
 
 # Make sure stdio is binary on Windows so the length prefix isn't mangled by
@@ -34,7 +42,19 @@ if sys.platform == "win32":
     except OSError:
         pass
 
-from core import handle_chat, detect_route, VERSION  # noqa: E402
+from core import (  # noqa: E402
+    StreamCancelled,
+    TIMEOUT_FRIENDLY,
+    VERSION,
+    build_prompt,
+    detect_route,
+    stream_claude,
+)
+
+# Single-message writes need to be serialized when streaming threads + the
+# main read loop both want stdout. A simple lock is enough.
+_send_lock = threading.Lock()
+_cancel_flag = threading.Event()
 
 
 def read_message() -> dict | None:
@@ -51,27 +71,80 @@ def read_message() -> dict | None:
 
 def send_message(payload: dict) -> None:
     """Write one length-prefixed JSON message to stdout."""
-    encoded = json.dumps(payload).encode("utf-8")
-    sys.stdout.buffer.write(struct.pack("<I", len(encoded)))
-    sys.stdout.buffer.write(encoded)
-    sys.stdout.buffer.flush()
+    with _send_lock:
+        encoded = json.dumps(payload).encode("utf-8")
+        sys.stdout.buffer.write(struct.pack("<I", len(encoded)))
+        sys.stdout.buffer.write(encoded)
+        sys.stdout.buffer.flush()
 
 
-def dispatch(request: dict) -> dict:
+def stream_chat(request: dict) -> None:
+    route = detect_route()
+    if not route["ready"]:
+        send_message({
+            "type": "chat_error",
+            "error": f"{route['label']} Install Claude Code to enable chat.",
+        })
+        return
+
+    message = (request.get("message") or "").strip()
+    if not message:
+        send_message({"type": "chat_error", "error": "message is required"})
+        return
+
+    prompt = build_prompt(
+        message=message,
+        history=request.get("history") or [],
+        page_context=request.get("page_context") or {},
+        current_step=request.get("current_step"),
+        guide_steps=request.get("guide_steps") or [],
+        user_profile=request.get("user_profile"),
+        user_questionnaire=request.get("user_questionnaire"),
+    )
+
+    _cancel_flag.clear()
+
+    def on_chunk(text: str) -> None:
+        send_message({"type": "chat_chunk", "text": text})
+
+    try:
+        stream_claude(
+            prompt=prompt,
+            claude_bin=route["claude_path"],
+            on_chunk=on_chunk,
+            is_cancelled=_cancel_flag.is_set,
+        )
+        send_message({"type": "chat_done", "mode": route["mode"]})
+    except subprocess.TimeoutExpired:
+        send_message({"type": "chat_error", "error": TIMEOUT_FRIENDLY})
+    except StreamCancelled:
+        send_message({"type": "chat_error", "error": "Cancelled"})
+    except Exception as e:
+        send_message({"type": "chat_error", "error": f"Server error: {e}"})
+
+
+def dispatch(request: dict) -> None:
+    """Handle one request. May produce zero, one, or many response messages."""
     msg_type = request.get("type", "")
     if msg_type == "status":
         route = detect_route()
-        return {
+        send_message({
             "type": "status",
             "version": VERSION,
             "mode": route["mode"],
             "label": route["label"],
             "ready": route["ready"],
-        }
+        })
+        return
     if msg_type == "chat":
-        result = handle_chat(request)
-        return {"type": "chat", **result}
-    return {"type": "error", "error": f"Unknown message type: {msg_type!r}"}
+        # Stream from a worker thread so the main loop can keep reading
+        # subsequent messages (e.g. cancel) while generation is in flight.
+        threading.Thread(target=stream_chat, args=(request,), daemon=True).start()
+        return
+    if msg_type == "cancel":
+        _cancel_flag.set()
+        return
+    send_message({"type": "error", "error": f"Unknown message type: {msg_type!r}"})
 
 
 def main() -> None:
@@ -84,13 +157,9 @@ def main() -> None:
         if request is None:
             return
         try:
-            response = dispatch(request)
+            dispatch(request)
         except Exception:
-            response = {"type": "error", "error": traceback.format_exc()}
-        try:
-            send_message(response)
-        except Exception:
-            return
+            send_message({"type": "error", "error": traceback.format_exc()})
 
 
 if __name__ == "__main__":
