@@ -113,15 +113,6 @@ def build_prompt(
             lines.append(f"  {marker} Step {s.get('step_number', '')}: {s.get('title', '')} [{s.get('section', '')}]")
         parts.append("\n".join(lines))
 
-    if current_step:
-        parts.append(
-            f"\n\n[ACTIVE STEP — the user is currently working on this]\n"
-            f"Step {current_step.get('step_number', '')}: {current_step.get('title', '')}\n"
-            f"{current_step.get('description', '')}\n"
-            "Always keep this step in mind. If the user asks where they are or what to do, answer from this step. "
-            "If they navigate to a relevant page, connect it to this step."
-        )
-
     if page_context and page_context.get("url"):
         content = page_context.get("text", "")[:6000]
         parts.append(
@@ -136,6 +127,17 @@ def build_prompt(
         for turn in history[-8:]:
             role = "User" if turn.get("role") == "user" else "Assistant"
             parts.append(f"\n{role}: {turn.get('content', '')}")
+
+    # Active step comes last — right before the user's message — so it is
+    # the freshest context and overrides anything seen on the page.
+    if current_step:
+        parts.append(
+            f"\n\n[REMINDER — active setup step]\n"
+            f"The user is on Step {current_step.get('step_number', '')}: {current_step.get('title', '')}\n"
+            f"{current_step.get('description', '')}\n"
+            "Answer questions about what to do from this step. "
+            "Do not suggest tasks from the page that are not part of this step."
+        )
 
     parts.append(f"\n\nUser: {message}\nAssistant:")
     return "".join(parts)
