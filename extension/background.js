@@ -10,9 +10,9 @@ const DEFAULT_HTTP_URL = "http://127.0.0.1:7848";
 const STATUS_POLL_MINUTES = 0.25; // 15s
 
 const MODE_LABELS = {
-  claude_desktop: "Connected through Claude Desktop",
-  anthropic_api: "Using your Anthropic API key",
-  not_connected: "Install Claude Desktop to get started",
+  claude_desktop: "Claude Desktop is connected. Using your Claude subscription.",
+  anthropic_api: "Using your Anthropic API key.",
+  not_connected: "Install Claude Desktop to get started.",
 };
 
 let httpUrl = DEFAULT_HTTP_URL;
