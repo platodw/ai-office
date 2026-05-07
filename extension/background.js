@@ -33,15 +33,6 @@ function setConnected(connected) {
 }
 
 function updateIcon(connected) {
-  const state = connected ? "connected" : "disconnected";
-  chrome.action.setIcon({
-    path: {
-      "16":  `icons/${state}_16.png`,
-      "32":  `icons/${state}_32.png`,
-      "48":  `icons/${state}_48.png`,
-      "128": `icons/${state}_128.png`,
-    }
-  });
   chrome.action.setTitle({
     title: connected ? "AI Office: Connected" : "AI Office: Disconnected"
   });
