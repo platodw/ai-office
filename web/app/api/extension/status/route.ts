@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS });
+}
+
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get("token");
-  if (!token) return NextResponse.json({ error: "Missing token" }, { status: 401 });
+  if (!token) return NextResponse.json({ error: "Missing token" }, { status: 401, headers: CORS });
 
   const supabase = createServiceClient();
 
@@ -13,7 +23,7 @@ export async function GET(request: Request) {
     .eq("token", token)
     .single();
 
-  if (!tokenRow) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  if (!tokenRow) return NextResponse.json({ error: "Invalid token" }, { status: 401, headers: CORS });
 
   const userId = tokenRow.user_id;
 
@@ -56,5 +66,5 @@ export async function GET(request: Request) {
     current_step: currentStep,
     all_steps: allSteps,
     progress: { total: totalSteps, completed: completedSteps },
-  });
+  }, { headers: CORS });
 }
