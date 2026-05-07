@@ -16,6 +16,8 @@ let serverUrl = "http://127.0.0.1:7848";
 let accountToken = "";
 let currentStep = null;
 let guideSteps = [];
+let userProfile = null;
+let userQuestionnaire = null;
 let pageContext = null;
 let messages = [];
 
@@ -159,6 +161,8 @@ async function loadCurrentStep() {
     const data = await res.json();
     currentStep = data.current_step ?? null;
     guideSteps = data.all_steps ?? [];
+    userProfile = data.profile ?? null;
+    userQuestionnaire = data.questionnaire ?? null;
     renderCurrentStep();
   } catch { /* non-fatal */ }
 }
@@ -221,6 +225,8 @@ async function sendMessage() {
         history: messages.slice(-10),
         current_step: stepContext,
         guide_steps: guideSteps,
+        user_profile: userProfile,
+        user_questionnaire: userQuestionnaire,
       })
     });
     thinkingEl.remove();

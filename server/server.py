@@ -49,8 +49,50 @@ def find_claude() -> str:
 CLAUDE_BIN = find_claude()
 
 
-def build_prompt(message: str, history: list, page_context: dict, current_step: dict | None, guide_steps: list) -> str:
+def build_prompt(
+    message: str,
+    history: list,
+    page_context: dict,
+    current_step: dict | None,
+    guide_steps: list,
+    user_profile: dict | None,
+    user_questionnaire: dict | None,
+) -> str:
     parts = [SYSTEM_PROMPT]
+
+    if user_profile or user_questionnaire:
+        lines = ["\n\n[User profile]"]
+        if user_profile:
+            lines.append(f"  Name: {user_profile.get('name', 'Unknown')}")
+            lines.append(f"  OS: {user_profile.get('os', 'Unknown')}")
+        if user_questionnaire:
+            q = user_questionnaire
+            if q.get("use_case"):
+                lines.append(f"  Setting up for: {q['use_case']}")
+            if q.get("categories"):
+                lines.append(f"  Focus areas: {', '.join(q['categories'])}")
+            if q.get("google_gmail") or q.get("microsoft_outlook"):
+                email = []
+                if q.get("google_gmail"): email.append("Gmail")
+                if q.get("microsoft_outlook"): email.append("Outlook")
+                lines.append(f"  Email: {', '.join(email)}")
+            if q.get("google_calendar") or q.get("microsoft_calendar"):
+                cal = []
+                if q.get("google_calendar"): cal.append("Google Calendar")
+                if q.get("microsoft_calendar"): cal.append("Microsoft Calendar")
+                lines.append(f"  Calendar: {', '.join(cal)}")
+            if q.get("note_taking_tool"):
+                lines.append(f"  Notes: {q['note_taking_tool']}")
+            if q.get("messaging_app"):
+                lines.append(f"  Messaging: {q['messaging_app']}")
+            if q.get("finance_tools"):
+                lines.append(f"  Finance tools: {', '.join(q['finance_tools'])}")
+            if q.get("creative_tools"):
+                lines.append(f"  Creative tools: {', '.join(q['creative_tools'])}")
+            if q.get("github"): lines.append("  Uses: GitHub")
+            if q.get("goal"):
+                lines.append(f"  Goal: {q['goal']}")
+        parts.append("\n".join(lines))
 
     if guide_steps:
         completed = sum(1 for s in guide_steps if s.get("status") in ("complete", "skipped"))
@@ -170,6 +212,8 @@ class Handler(BaseHTTPRequestHandler):
                 page_context=body.get("page_context") or {},
                 current_step=body.get("current_step"),
                 guide_steps=body.get("guide_steps") or [],
+                user_profile=body.get("user_profile"),
+                user_questionnaire=body.get("user_questionnaire"),
             )
             response = run_claude(prompt)
             self.send_json(200, {"response": response})

@@ -15,48 +15,44 @@ export async function GET(request: Request) {
 
   if (!tokenRow) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
-  // Update last_used_at
-  await supabase
-    .from("extension_tokens")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("token", token);
+  const userId = tokenRow.user_id;
 
-  // Get current pending step
-  const { data: guide } = await supabase
-    .from("setup_guides")
-    .select("id")
-    .eq("user_id", tokenRow.user_id)
-    .single();
+  // Update last_used_at and fetch all user data in parallel
+  const [, profileResult, questionnaireResult, guideResult] = await Promise.all([
+    supabase.from("extension_tokens").update({ last_used_at: new Date().toISOString() }).eq("token", token),
+    supabase.from("profiles").select("name, os").eq("id", userId).single(),
+    supabase.from("questionnaire_responses").select("responses").eq("user_id", userId).single(),
+    supabase.from("setup_guides").select("id, generated_at").eq("user_id", userId).single(),
+  ]);
 
+  const profile = profileResult.data;
+  const questionnaire = questionnaireResult.data?.responses ?? null;
+  const guide = guideResult.data;
+
+  let allSteps: object[] = [];
   let currentStep = null;
-  let totalSteps = 0;
-  let completedSteps = 0;
 
   if (guide) {
     const { data: steps } = await supabase
       .from("setup_steps")
-      .select("id, step_number, section, title, description, target_urls, status")
+      .select("id, step_number, section, title, description, status, target_urls")
       .eq("guide_id", guide.id)
       .order("step_number");
 
     if (steps) {
-      totalSteps = steps.length;
-      completedSteps = steps.filter((s: { status: string }) => s.status === "complete" || s.status === "skipped").length;
-      currentStep = steps.find((s: { status: string }) => s.status === "pending" || s.status === "in_progress") ?? null;
+      allSteps = steps;
+      currentStep = steps.find(s => s.status === "pending" || s.status === "in_progress") ?? null;
     }
   }
 
-  const allSteps = guide
-    ? (await supabase
-        .from("setup_steps")
-        .select("id, step_number, section, title, status")
-        .eq("guide_id", guide.id)
-        .order("step_number")).data ?? []
-    : [];
+  const totalSteps = allSteps.length;
+  const completedSteps = allSteps.filter((s: any) => s.status === "complete" || s.status === "skipped").length;
 
   return NextResponse.json({
     connected: true,
     has_guide: !!guide,
+    profile,
+    questionnaire,
     current_step: currentStep,
     all_steps: allSteps,
     progress: { total: totalSteps, completed: completedSteps },
