@@ -43,23 +43,25 @@
       <span class="endorsement">by Dan Plato Consulting</span>
     </div>
 
-    <!-- Current page context + active step -->
+    <!-- Current page context -->
     <div class="context-bar">
       <div class="page-context-pill">
         <img id="page-favicon" class="page-favicon" src="" alt="" style="display:none">
         <span id="page-title" class="page-title">No page loaded</span>
       </div>
-      <div id="step-pill" class="step-pill hidden">
-        <span class="step-pill-label">Step</span>
-        <span id="step-pill-title" class="step-pill-title"></span>
-        <button id="step-expand-btn" class="step-expand-btn" title="View instructions">▾</button>
-        <span class="step-pill-divider"></span>
-        <button id="step-complete-btn" class="step-complete-btn" title="Mark complete">✓</button>
-      </div>
     </div>
 
-    <!-- Step instructions dropdown -->
-    <div id="step-detail" class="step-detail hidden">
+    <!-- Active step bar (full width, own row) -->
+    <div id="step-bar" class="step-bar hidden">
+      <span class="step-bar-label">Step</span>
+      <span id="step-bar-title" class="step-bar-title"></span>
+      <button id="step-expand-btn" class="step-expand-btn" title="View instructions">▾</button>
+      <span class="step-bar-divider"></span>
+      <button id="step-complete-btn" class="step-complete-btn" title="Mark complete">✓</button>
+    </div>
+
+    <!-- Step instructions slide-down -->
+    <div id="step-detail" class="step-detail">
       <div id="step-detail-body" class="step-detail-body"></div>
     </div>
 
