@@ -142,6 +142,7 @@ def run_claude(prompt: str) -> str:
             [CLAUDE_BIN, "-p", "--permission-mode", "bypassPermissions", prompt],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=120,
         )
         output = result.stdout.strip()
