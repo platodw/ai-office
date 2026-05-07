@@ -40,7 +40,7 @@ export const STEP_TEMPLATES: StepTemplate[] = [
     description: "Node.js is required to install Claude Code and most MCP connectors.",
     why: "Most integrations in this guide are npm packages. Node.js is the runtime that lets them run on your machine.",
     click_steps: [
-      "Go to nodejs.org and click the LTS download button.",
+      "Go to nodejs.org and click the "Download Node.js (LTS)" or "Get Node.js" button on the homepage (the exact label may vary, but it will be the prominent button for the LTS version).",
       "Run the installer and accept all defaults.",
       "Restart your computer after the install finishes.",
     ],
