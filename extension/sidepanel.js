@@ -107,6 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("add-action-btn").addEventListener("click", toggleEditor);
   document.getElementById("close-editor-btn").addEventListener("click", toggleEditor);
   document.getElementById("save-action-btn").addEventListener("click", saveNewAction);
+  document.getElementById("step-expand-btn").addEventListener("click", toggleStepDetail);
   document.getElementById("step-complete-btn").addEventListener("click", () => {
     if (currentStep) handleMarkComplete();
   });
@@ -300,15 +301,29 @@ async function loadCurrentStep() {
 function renderCurrentStep() {
   const pill = document.getElementById("step-pill");
   const titleEl = document.getElementById("step-pill-title");
+  const detail = document.getElementById("step-detail");
+  const detailBody = document.getElementById("step-detail-body");
   if (!pill || !titleEl) return;
   if (!currentStep) {
     pill.classList.add("hidden");
+    if (detail) detail.classList.add("hidden");
     return;
   }
   const num = currentStep.step_number ? `${currentStep.step_number}. ` : "";
   titleEl.textContent = `${num}${currentStep.title}`;
   titleEl.title = currentStep.title;
+  if (detailBody) {
+    detailBody.textContent = currentStep.description || currentStep.title;
+  }
   pill.classList.remove("hidden");
+}
+
+function toggleStepDetail() {
+  const detail = document.getElementById("step-detail");
+  const btn = document.getElementById("step-expand-btn");
+  if (!detail || !btn) return;
+  const open = detail.classList.toggle("hidden");  // toggle returns true if class was added (now hidden)
+  btn.classList.toggle("open", !open);
 }
 
 async function markStepComplete(stepId) {
