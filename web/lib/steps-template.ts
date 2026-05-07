@@ -523,7 +523,7 @@ export const STEP_TEMPLATES: StepTemplate[] = [
     links: [],
     target_urls: [],
     completion_criteria: "SharePoint connector installed and at least one site accessible",
-    showIf: r => r.microsoft_sharepoint || r.wants_file_organization,
+    showIf: r => r.microsoft_sharepoint,
   },
   // ── Finish ────────────────────────────────────────────────────────────
   {
