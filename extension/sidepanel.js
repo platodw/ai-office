@@ -26,6 +26,50 @@ let companionStatus = { connected: false, mode: "not_connected", label: "Checkin
 const NOT_CONNECTED_HINT =
   "Install Claude Code from claude.ai/download, then run the AI Office companion installer.";
 
+// ── Telemetry (opt-in, scrubbed) ─────────────────────────────────────────────
+// Anonymous so we can detect places where instructions confuse users. The
+// session_id rotates daily and is not tied to the user account. Server-side
+// is gated by profiles.allow_telemetry; if the user hasn't opted in the
+// endpoint silently drops the call.
+function scrubPrompt(text) {
+  return String(text || "")
+    .replace(/\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g, "[email]")
+    .replace(/\b\+?\d{1,3}[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[phone]")
+    .replace(/\b[a-zA-Z0-9_-]{32,}\b/g, "[token]")
+    .replace(/[A-Z]:\\[^\s"<>|]+/g, "[path]")
+    .replace(/\/(?:home|Users)\/[^\s"<>|]+/g, "[path]");
+}
+
+function getDailySessionId() {
+  const today = new Date().toISOString().slice(0, 10);
+  const key = `telemetry_session_${today}`;
+  let id = sessionStorage.getItem(key);
+  if (!id) {
+    id = `${today}-${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem(key, id);
+  }
+  return id;
+}
+
+function pageDomain(url) {
+  try { return new URL(url).hostname; } catch { return ""; }
+}
+
+function fireTelemetry({ stepId, prompt, url }) {
+  if (!accountToken || !webAppUrl) return;
+  fetch(`${webAppUrl}/api/telemetry?token=${encodeURIComponent(accountToken)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: getDailySessionId(),
+      step_id: stepId || null,
+      page_domain: pageDomain(url || ""),
+      scrubbed_prompt: scrubPrompt(prompt),
+    }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
   const stored = await chrome.storage.local.get(["server_url", "web_app_url", "account_token", "configured"]);
@@ -311,6 +355,13 @@ async function sendMessage() {
 
   appendMessage("user", text);
   messages.push({ role: "user", content: text });
+
+  // Anonymous telemetry — only sent if the user has opted in server-side.
+  fireTelemetry({
+    stepId: currentStep?.id,
+    prompt: text,
+    url: pageContext?.url,
+  });
 
   // Intent: mark current step complete
   if (MARK_COMPLETE_PATTERN.test(text) && currentStep) {

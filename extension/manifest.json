@@ -16,7 +16,7 @@
     "<all_urls>"
   ],
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src * data:; connect-src http://127.0.0.1:7848 http://127.0.0.1:7847 http://127.0.0.1:7850 http://localhost:7848 http://localhost:7850 https://aioffice.app"
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src * data:; connect-src http://127.0.0.1:7848 http://127.0.0.1:7847 http://127.0.0.1:7850 http://localhost:7848 http://localhost:7850 https://aioffice.app https://ai-office-gamma.vercel.app https://*.vercel.app"
   },
   "background": {
     "service_worker": "background.js"
