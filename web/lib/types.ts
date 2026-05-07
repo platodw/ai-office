@@ -1,5 +1,4 @@
 export type OS = "mac" | "windows";
-export type TechnicalComfort = "beginner" | "intermediate" | "power";
 export type StepStatus = "pending" | "in_progress" | "complete" | "skipped";
 export type StepSection =
   | "infrastructure"
@@ -31,8 +30,7 @@ export interface QuestionnaireResponses {
   // Step 1: About You
   name: string;
   os: OS;
-  technical_comfort: TechnicalComfort;
-  use_case: "work" | "personal" | "both";
+use_case: "work" | "personal" | "both";
   // Step 2: Quick Check
   has_claude_account: boolean;
   has_claude_desktop: boolean;

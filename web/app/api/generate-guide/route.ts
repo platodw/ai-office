@@ -11,11 +11,7 @@ function buildUserProfile(r: QuestionnaireResponses): string {
     `Name: ${r.name || "the user"}`,
     `OS: ${r.os}`,
     `Use case: ${r.use_case}`,
-    `Technical comfort: ${r.technical_comfort} (${
-      r.technical_comfort === "beginner" ? "needs detailed explanations" :
-      r.technical_comfort === "intermediate" ? "familiar with terminals and config files" :
-      "developer — keep it concise"
-    })`,
+    `Technical level: beginner — use plain language, step-by-step instructions, explain every term`,
     `Claude account: ${r.has_claude_account ? "yes" : "not yet — first step is signing up"}`,
     `Claude Desktop installed: ${r.has_claude_desktop ? "yes" : "no — needs to install it"}`,
     `Admin access: ${r.has_admin_access ? "yes, full" : "limited or IT-managed — flag admin-required steps"}`,

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { OS, TechnicalComfort, EmailAccount, Briefing, QuestionnaireResponses } from "@/lib/types";
+import type { OS, EmailAccount, Briefing, QuestionnaireResponses } from "@/lib/types";
 import { Check, Plus, X, ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
 import { LogoMark } from "@/components/logo-mark";
 
@@ -53,11 +53,6 @@ const OS_OPTIONS: { id: OS; label: string; icon: string }[] = [
   { id: "windows", label: "Windows", icon: "🪟" },
 ];
 
-const COMFORT_OPTIONS: { id: TechnicalComfort; label: string; desc: string }[] = [
-  { id: "beginner",     label: "Beginner",     desc: "New to this — step-by-step guidance appreciated" },
-  { id: "intermediate", label: "Intermediate", desc: "Comfortable with terminals and config files" },
-  { id: "power",        label: "Power user",   desc: "Developer — keep it concise, skip the basics" },
-];
 
 const CATEGORIES = [
   { id: "productivity", icon: "📧", label: "Productivity",                desc: "Email, calendar, notes, briefings, action items" },
@@ -168,7 +163,6 @@ export default function OnboardingPage() {
   // Step 1: About You
   const [name, setName] = useState("");
   const [os, setOs] = useState<OS>("windows");
-  const [technicalComfort, setTechnicalComfort] = useState<TechnicalComfort>("intermediate");
   const [useCase, setUseCase] = useState<"work" | "personal" | "both" | null>(null);
 
   // Step 2: Quick Check
@@ -315,8 +309,7 @@ export default function OnboardingPage() {
 
       const responses: QuestionnaireResponses = {
         name, os,
-        technical_comfort: technicalComfort,
-        use_case: useCase ?? "personal",
+use_case: useCase ?? "personal",
         has_claude_account: hasClaudeAccount ?? false,
         has_claude_desktop: hasClaudeDesktop ?? false,
         has_admin_access: hasAdminAccess ?? true,
@@ -430,14 +423,6 @@ export default function OnboardingPage() {
                     { id: "both" as const,     label: "Both",              desc: "Work and personal use" },
                   ].map(opt => (
                     <RadioRow key={opt.id} checked={useCase === opt.id} onClick={() => setUseCase(opt.id)} label={opt.label} desc={opt.desc} />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-muted mb-2">Technical comfort</label>
-                <div className="space-y-2">
-                  {COMFORT_OPTIONS.map(opt => (
-                    <RadioRow key={opt.id} checked={technicalComfort === opt.id} onClick={() => setTechnicalComfort(opt.id)} label={opt.label} desc={opt.desc} />
                   ))}
                 </div>
               </div>
@@ -952,8 +937,7 @@ export default function OnboardingPage() {
                   ["Name", name || "(not set)"],
                   ["OS", os],
                   ["Use case", useCase ?? ""],
-                  ["Experience", technicalComfort],
-                  categories.size > 0 && ["Focus areas", Array.from(categories).map(c => CATEGORIES.find(x => x.id === c)?.label).filter(Boolean).join(", ")],
+categories.size > 0 && ["Focus areas", Array.from(categories).map(c => CATEGORIES.find(x => x.id === c)?.label).filter(Boolean).join(", ")],
                   (googleGmail || microsoftOutlook) && ["Email", [googleGmail && "Gmail", microsoftOutlook && "Outlook"].filter(Boolean).join(", ")],
                   emailAccounts.filter(a => a.email.trim()).length > 0 && ["Accounts", emailAccounts.filter(a => a.email.trim()).map(a => `${a.email} (${a.account_type})`).join(", ")],
                   (googleCalendar || microsoftCalendar) && ["Calendar", [googleCalendar && "Google Calendar", microsoftCalendar && "Microsoft Calendar"].filter(Boolean).join(", ")],
