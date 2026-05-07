@@ -72,12 +72,24 @@ function handleTabChange() {
   clearTimeout(tabChangeTimer);
   tabChangeTimer = setTimeout(async () => {
     pageContext = null;
-    messages = [];
-    document.getElementById("messages").innerHTML = "";
     document.getElementById("page-title").textContent = "Loading...";
     setFavicon(null);
     await loadPageContext();
+    // Keep conversation history but inject a nav event so Claude knows the page changed
+    if (pageContext) {
+      messages.push({ role: "user", content: `[Navigated to: ${pageContext.title} — ${pageContext.url}]` });
+      messages.push({ role: "assistant", content: `[Page updated to: ${pageContext.title}]` });
+      appendNavMarker(pageContext.title);
+    }
   }, 500);
+}
+
+function appendNavMarker(title) {
+  const el = document.createElement("div");
+  el.className = "nav-marker";
+  el.textContent = title;
+  document.getElementById("messages").appendChild(el);
+  el.scrollIntoView({ behavior: "smooth", block: "end" });
 }
 
 // ── Connection ────────────────────────────────────────────────────────────────

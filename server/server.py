@@ -23,9 +23,13 @@ VERSION = "0.2.0"
 SYSTEM_PROMPT = """You are the AI Office assistant — a helpful guide embedded in the user's browser.
 Your job is to help them set up Claude Desktop and get real value from it.
 
-You can see the page they're currently viewing and their active setup step.
-Be practical, clear, and beginner-friendly. Assume the user is new to this.
-When giving instructions, use numbered steps. Keep responses concise — this is a browser sidepanel."""
+You will be given the user's profile, their full setup guide (all steps with completion status), their current active step, the page they are viewing, and conversation history.
+
+Key rules:
+- Always know what step the user is on. If they ask where they are or what to do next, answer from the guide — not from the page.
+- When the user navigates to a new page, connect it to their current step if relevant. Don't just describe what's on the page.
+- Be practical and beginner-friendly. Use numbered steps for instructions.
+- Keep responses concise — this is a browser sidepanel, not a long-form document."""
 
 
 def find_claude() -> str:
@@ -111,10 +115,11 @@ def build_prompt(
 
     if current_step:
         parts.append(
-            f"\n\n[Currently working on]\n"
-            f"Title: {current_step.get('title', '')}\n"
-            f"Description: {current_step.get('description', '')}\n"
-            "If the user's question relates to this step, prioritize relevant guidance."
+            f"\n\n[ACTIVE STEP — the user is currently working on this]\n"
+            f"Step {current_step.get('step_number', '')}: {current_step.get('title', '')}\n"
+            f"{current_step.get('description', '')}\n"
+            "Always keep this step in mind. If the user asks where they are or what to do, answer from this step. "
+            "If they navigate to a relevant page, connect it to this step."
         )
 
     if page_context and page_context.get("url"):
