@@ -27,7 +27,9 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=Output
-OutputBaseFilename=aioffice-setup-{#MyAppVersion}
+; Stable filename so the "latest release" download URL doesn't change per version.
+OutputBaseFilename=aioffice-setup
+VersionInfoVersion={#MyAppVersion}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
