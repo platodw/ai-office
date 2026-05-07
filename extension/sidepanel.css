@@ -168,6 +168,8 @@ body {
 .message ul, .message ol { margin: 4px 0 6px; padding-left: 18px; }
 .message li { margin-bottom: 2px; }
 .message strong { font-weight: 600; }
+.message a { color: var(--ao-accent); text-decoration: underline; word-break: break-all; }
+.message a:hover { opacity: 0.75; }
 .message em { font-style: italic; }
 .message code { font-family: monospace; font-size: 0.9em; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px; }
 .message pre { background: rgba(0,0,0,0.06); border-radius: 6px; padding: 8px; overflow-x: auto; margin: 6px 0; }

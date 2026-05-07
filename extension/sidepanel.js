@@ -253,27 +253,55 @@ async function sendWithPrompt(prompt) {
 }
 
 function renderMarkdown(text) {
-  // Escape HTML
-  let s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  // Code blocks
-  s = s.replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-  // Inline formatting
+  // 1. Extract code blocks and URLs before HTML escaping so we can handle them cleanly
+  const protected_ = [];
+  let s = text;
+
+  s = s.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) => {
+    protected_.push({ type: 'code', content: code });
+    return `\x00P${protected_.length - 1}\x00`;
+  });
+
+  s = s.replace(/https?:\/\/[^\s<>")\]]+/g, url => {
+    const safeHref = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    protected_.push({ type: 'url', content: `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${url.replace(/&/g, '&amp;')}</a>` });
+    return `\x00P${protected_.length - 1}\x00`;
+  });
+
+  // 2. HTML escape
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 3. Inline formatting
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
   s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-  // Lists — process line by line
+
+  // 4. Lists — process line by line; blank lines between consecutive list items are skipped
   const lines = s.split('\n');
   const out = [];
   let inUl = false, inOl = false;
-  for (const line of lines) {
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const ulM = line.match(/^- (.+)/);
-    const olM = line.match(/^(\d+)\. (.+)/);
+    const olM = line.match(/^\d+\. (.+)/);
+
     if (ulM) {
       if (!inUl) { if (inOl) { out.push('</ol>'); inOl = false; } out.push('<ul>'); inUl = true; }
       out.push(`<li>${ulM[1]}</li>`);
     } else if (olM) {
       if (!inOl) { if (inUl) { out.push('</ul>'); inUl = false; } out.push('<ol>'); inOl = true; }
-      out.push(`<li>${olM[2]}</li>`);
+      out.push(`<li>${olM[1]}</li>`);
+    } else if (line.trim() === '' && (inUl || inOl)) {
+      // Blank line inside a list — peek ahead; if next non-empty line continues the same list, skip the blank
+      const next = lines.slice(i + 1).find(l => l.trim() !== '');
+      const continues = next && ((inUl && /^- /.test(next)) || (inOl && /^\d+\. /.test(next)));
+      if (!continues) {
+        if (inUl) { out.push('</ul>'); inUl = false; }
+        if (inOl) { out.push('</ol>'); inOl = false; }
+        out.push(line);
+      }
+      // else: skip the blank line so the list stays together
     } else {
       if (inUl) { out.push('</ul>'); inUl = false; }
       if (inOl) { out.push('</ol>'); inOl = false; }
@@ -282,7 +310,18 @@ function renderMarkdown(text) {
   }
   if (inUl) out.push('</ul>');
   if (inOl) out.push('</ol>');
-  return out.join('\n').replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>');
+
+  // 5. Restore protected content
+  let result = out.join('\n');
+  result = result.replace(/\x00P(\d+)\x00/g, (_, i) => {
+    const item = protected_[parseInt(i)];
+    return item.type === 'code' ? `<pre><code>${item.content}</code></pre>` : item.content;
+  });
+
+  // 6. Paragraph and line breaks
+  result = result.replace(/\n\n+/g, '</p><p>');
+  result = result.replace(/\n/g, '<br>');
+  return result;
 }
 
 function appendMessage(role, text) {
