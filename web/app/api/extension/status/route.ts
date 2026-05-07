@@ -51,7 +51,7 @@ export async function GET(request: Request) {
 
     if (steps) {
       allSteps = steps;
-      currentStep = steps.find(s => s.status === "pending" || s.status === "in_progress") ?? null;
+      currentStep = steps.find((s: { status: string }) => s.status === "pending" || s.status === "in_progress") ?? null;
     }
   }
 
