@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { STEP_TEMPLATES } from "@/lib/steps-template";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -34,16 +34,22 @@ Skip questions that are:
 If no clear suggestions, return [].`;
 
 export async function POST() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Auth via the user-context client; all subsequent DB ops use the service
+  // client so they're not gated by per-row RLS (which doesn't have an INSERT
+  // policy for template_suggestions and shouldn't — only this server endpoint
+  // writes there).
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase
+  const { data: profile } = await authClient
     .from("profiles")
     .select("is_admin")
     .eq("id", user.id)
     .single();
   if (!profile?.is_admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const supabase = createServiceClient();
 
   // Pull last 7 days of telemetry, grouped by step.
   const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
