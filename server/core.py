@@ -6,14 +6,34 @@ Used by both the HTTP server (server.py) and the Native Messaging host
 build a prompt, and run it through the Claude CLI.
 """
 
+import json
 import os
 import queue
 import subprocess
+import tempfile
 import threading
 import time
+from pathlib import Path
 from typing import Callable, Optional
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
+
+# Cached path to an empty MCP config file. We pass this to `claude -p` along
+# with --strict-mcp-config so the user's MCP servers don't get spun up — they
+# can take 10-30s to initialize and we don't need any of them for chat
+# generation. Lazily written on first use.
+_empty_mcp_config_path: Optional[Path] = None
+
+
+def _ensure_empty_mcp_config() -> Path:
+    global _empty_mcp_config_path
+    if _empty_mcp_config_path and _empty_mcp_config_path.exists():
+        return _empty_mcp_config_path
+    p = Path(tempfile.gettempdir()) / "aioffice-empty-mcp.json"
+    if not p.exists():
+        p.write_text(json.dumps({"mcpServers": {}}), encoding="utf-8")
+    _empty_mcp_config_path = p
+    return p
 
 SYSTEM_PROMPT = """You are the AI Office assistant — a helpful guide embedded in the user's browser.
 Your job is to help them set up Claude Desktop and get real value from it.
@@ -218,33 +238,45 @@ def stream_claude(
     timeout: int = DEFAULT_TIMEOUT_SEC,
     is_cancelled: Optional[Callable[[], bool]] = None,
 ) -> str:
-    """Run `claude -p` and stream stdout to on_chunk as it arrives.
+    """Run `claude -p` and stream text deltas to on_chunk as they arrive.
 
-    Uses a reader thread so we can poll for timeout and cancellation. Returns
-    the full assembled output on success. Raises subprocess.TimeoutExpired if
-    we hit the deadline, StreamCancelled if the caller flips the cancel flag.
+    Uses --output-format=stream-json so we get token-by-token deltas instead
+    of one big buffered response at the end. Skips the user's MCP servers via
+    --strict-mcp-config + an empty --mcp-config so we don't pay 10-30s of
+    init cost on every turn.
+
+    Reader thread reads stdout line by line; each line is a JSON event. We
+    pull the text out of `content_block_delta` events and forward them.
     """
+    mcp_config = _ensure_empty_mcp_config()
+    args = [
+        claude_bin,
+        # MCP arg is multi-value, so put it BEFORE -p so the prompt isn't
+        # consumed as another config path.
+        "--mcp-config", str(mcp_config),
+        "--strict-mcp-config",
+        "-p",
+        "--output-format=stream-json",
+        "--include-partial-messages",
+        "--verbose",
+        "--permission-mode", "bypassPermissions",
+        prompt,
+    ]
     proc = subprocess.Popen(
-        [claude_bin, "-p", "--permission-mode", "bypassPermissions", prompt],
+        args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
-        bufsize=1,  # line-buffered
+        bufsize=1,
     )
 
     q: "queue.Queue[tuple[str, Optional[str]]]" = queue.Queue()
 
     def reader(stream, kind):
         try:
-            while True:
-                # Read chunks rather than full lines so single-line outputs
-                # still stream incrementally. claude -p tends to emit lines,
-                # but we don't want to depend on it.
-                chunk = stream.read(256)
-                if not chunk:
-                    break
-                q.put((kind, chunk))
+            for line in stream:
+                q.put((kind, line))
         except Exception as e:
             q.put(("err", str(e)))
         finally:
@@ -257,6 +289,32 @@ def stream_claude(
     pieces: list[str] = []
     out_done = False
     err_done = False
+
+    def handle_event(line: str) -> bool:
+        """Extract text from a stream-json line. Returns True if we should stop."""
+        line = line.strip()
+        if not line:
+            return False
+        try:
+            evt = json.loads(line)
+        except json.JSONDecodeError:
+            return False
+        evt_type = evt.get("type")
+        if evt_type == "stream_event":
+            event = evt.get("event") or {}
+            inner = event.get("type")
+            if inner == "content_block_delta":
+                delta = event.get("delta") or {}
+                text = delta.get("text") or ""
+                if text:
+                    pieces.append(text)
+                    on_chunk(text)
+            elif inner == "message_stop":
+                return True
+        elif evt_type == "result":
+            # Final result event — claude -p signals completion.
+            return True
+        return False
 
     try:
         while not (out_done and err_done):
@@ -272,13 +330,13 @@ def stream_claude(
             except queue.Empty:
                 continue
             if kind == "out" and val:
-                pieces.append(val)
-                on_chunk(val)
+                if handle_event(val):
+                    # We've seen the stop event; drain quickly and exit.
+                    out_done = True
             elif kind == "out_eof":
                 out_done = True
             elif kind == "err_out":
-                # Captured for debugging but not streamed to the user.
-                pass
+                pass  # captured but not surfaced
             elif kind == "err_out_eof":
                 err_done = True
             elif kind == "err":
