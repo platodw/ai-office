@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { Download, ExternalLink } from "lucide-react";
 import CopyToken from "@/components/copy-token";
 import { SECTION_LABELS } from "@/lib/types";
+
+const INSTALLER_URL =
+  "https://github.com/platodw/ai-office/releases/latest/download/aioffice-setup.exe";
+const EXTENSION_INSTRUCTIONS_URL =
+  "https://github.com/platodw/ai-office#install-the-chrome-extension";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -125,23 +131,62 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Extension connection */}
+      {/* Get started */}
       <div className="bg-surface border border-border rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-text mb-1">Connect the Chrome extension</h2>
-        <p className="text-muted text-sm mb-4">
-          Paste this token into the AI Office extension to link it to your account.
-          The extension will show your current setup step as you browse.
-        </p>
-        {token ? (
-          <CopyToken token={token.token} />
-        ) : (
-          <div className="text-muted text-sm">Token not found. Try signing out and back in.</div>
-        )}
-        <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border">
-          <div className="text-xs text-muted mb-1">Companion server</div>
-          <div className="text-xs font-mono text-text">python server/server.py</div>
-          <div className="text-xs text-muted mt-1">Start this on your machine before using the extension.</div>
-        </div>
+        <h2 className="text-sm font-semibold text-text mb-1">Get started</h2>
+        <p className="text-muted text-sm mb-5">Three steps to connect AI Office to Claude on your computer.</p>
+
+        <ol className="space-y-5">
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 bg-primary text-text rounded-full flex items-center justify-center text-xs font-semibold">1</span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-text">Install the Chrome extension</div>
+              <p className="text-muted text-xs mt-0.5 mb-2">
+                Adds the AI Office side panel to Chrome. Web Store listing coming soon — for now, load it in developer mode.
+              </p>
+              <a
+                href={EXTENSION_INSTRUCTIONS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                Installation instructions <ExternalLink size={12} />
+              </a>
+            </div>
+          </li>
+
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 bg-primary text-text rounded-full flex items-center justify-center text-xs font-semibold">2</span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-text">Download the AI Office installer</div>
+              <p className="text-muted text-xs mt-0.5 mb-2">
+                Lets the extension talk to Claude on your machine. Windows only for now.
+              </p>
+              <a
+                href={INSTALLER_URL}
+                className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-text font-semibold px-4 py-2 rounded-lg text-sm transition-colors"
+              >
+                <Download size={14} />
+                Download for Windows
+              </a>
+            </div>
+          </li>
+
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 bg-primary text-text rounded-full flex items-center justify-center text-xs font-semibold">3</span>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-text">Paste your token into the extension</div>
+              <p className="text-muted text-xs mt-0.5 mb-2">
+                Open the AI Office side panel in Chrome and paste this token to link it to your account.
+              </p>
+              {token ? (
+                <CopyToken token={token.token} />
+              ) : (
+                <div className="text-muted text-xs">Token not found. Try signing out and back in.</div>
+              )}
+            </div>
+          </li>
+        </ol>
       </div>
     </div>
   );

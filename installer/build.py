@@ -92,7 +92,7 @@ def compile_iss() -> Path | None:
     print(f"Compiling with {iscc}")
     subprocess.check_call([str(iscc), str(ISS_PATH)])
     output = INSTALLER_DIR / "Output"
-    setup = next(output.glob("aioffice-setup-*.exe"), None) if output.exists() else None
+    setup = next(output.glob("aioffice-setup*.exe"), None) if output.exists() else None
     if setup:
         print(f"Installer: {setup}")
     return setup
