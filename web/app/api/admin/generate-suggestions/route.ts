@@ -67,6 +67,27 @@ export async function POST() {
     .eq("status", "pending");
   const seenQuestions = new Set((existing || []).map(s => s.triggering_question));
 
+  // The extension sends the setup_steps.id (DB UUID), not the template id, so
+  // resolve UUID → title → template. We cache the title lookup per step_id.
+  const stepIds = [...new Set(events.map(e => e.step_id).filter((x): x is string => !!x))];
+  const titleByStepId: Record<string, string> = {};
+  if (stepIds.length > 0) {
+    const { data: rows } = await supabase
+      .from("setup_steps")
+      .select("id, title")
+      .in("id", stepIds);
+    for (const r of rows || []) titleByStepId[r.id] = r.title;
+  }
+
+  function templateFor(stepId: string) {
+    // Allow either the raw template id (future-proof) or a UUID resolved by title.
+    const direct = STEP_TEMPLATES.find(t => t.id === stepId);
+    if (direct) return direct;
+    const title = titleByStepId[stepId];
+    if (!title) return null;
+    return STEP_TEMPLATES.find(t => t.title === title) || null;
+  }
+
   // Group by step_id and analyze each batch.
   const byStep: Record<string, typeof events> = {};
   for (const e of events) {
@@ -79,7 +100,7 @@ export async function POST() {
   let analyzed = 0;
 
   for (const [stepId, stepEvents] of Object.entries(byStep)) {
-    const template = STEP_TEMPLATES.find(t => t.id === stepId);
+    const template = templateFor(stepId);
     if (!template) continue;
 
     const prompt = `Step template:
