@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { Download, ExternalLink } from "lucide-react";
 import CopyToken from "@/components/copy-token";
+import TelemetryToggle from "@/components/telemetry-toggle";
 import { SECTION_LABELS } from "@/lib/types";
 
 const INSTALLER_URL =
@@ -16,7 +17,7 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
 
   const [{ data: profile }, { data: token }, { data: guide }] = await Promise.all([
-    supabase.from("profiles").select("name, os").eq("id", user.id).single(),
+    supabase.from("profiles").select("name, os, allow_telemetry, is_admin").eq("id", user.id).single(),
     supabase.from("extension_tokens").select("token").eq("user_id", user.id).single(),
     supabase.from("setup_guides").select("id, generated_at").eq("user_id", user.id).single(),
   ]);
@@ -188,6 +189,19 @@ export default async function DashboardPage() {
           </li>
         </ol>
       </div>
+
+      {/* Privacy / telemetry toggle */}
+      <div className="mt-6">
+        <TelemetryToggle initial={!!profile?.allow_telemetry} userId={user.id} />
+      </div>
+
+      {profile?.is_admin && (
+        <div className="mt-6 text-right">
+          <Link href="/admin/suggestions" className="text-xs text-muted hover:text-primary transition-colors">
+            Admin → Suggestions
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
