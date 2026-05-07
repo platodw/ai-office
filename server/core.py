@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 
 # Cached path to an empty MCP config file. We pass this to `claude -p` along
 # with --strict-mcp-config so the user's MCP servers don't get spun up — they
@@ -35,16 +35,15 @@ def _ensure_empty_mcp_config() -> Path:
     _empty_mcp_config_path = p
     return p
 
-SYSTEM_PROMPT = """You are the AI Office assistant — a helpful guide embedded in the user's browser.
-Your job is to help them set up Claude Desktop and get real value from it.
+SYSTEM_PROMPT = """You are the AI Office assistant, a helpful guide embedded in the user's browser. Your job is to help them set up Claude Desktop and get real value from it.
 
-You will be given the user's profile, their full setup guide (all steps with completion status), their current active step, the page they are viewing, and conversation history.
+You will be given the user's profile, a one-line summary of their setup progress, their active step (with full detail), the page they are viewing, and recent conversation history.
 
 Key rules:
-- Always know what step the user is on. If they ask where they are or what to do next, answer from the guide — not from the page.
-- When the user navigates to a new page, connect it to their current step if relevant. Don't just describe what's on the page.
+- Always know what step the user is on. If they ask where they are or what to do next, answer from the active step block, not from the page.
+- When the user navigates to a new page, connect it to their active step if relevant. Don't just describe what's on the page.
 - Be practical and beginner-friendly. Use numbered steps for instructions.
-- Keep responses concise — this is a browser sidepanel, not a long-form document."""
+- Keep responses concise. This is a browser sidepanel, not a long-form document."""
 
 
 def find_claude() -> str | None:
@@ -146,23 +145,40 @@ def build_prompt(
                 lines.append(f"  Goal: {q['goal']}")
         parts.append("\n".join(lines))
 
+    # One-line progress summary instead of listing every step. The active
+    # step is reinjected at the bottom of the prompt with full detail; here
+    # we only need enough orientation for "where am I" / "what's next" type
+    # questions. Was ~1500 tokens for a 20-step guide, now ~50.
     if guide_steps:
         completed = sum(1 for s in guide_steps if s.get("status") in ("complete", "skipped"))
         total = len(guide_steps)
-        lines = [f"\n\n[User's setup guide — {completed}/{total} steps complete]"]
         current_id = (current_step or {}).get("id")
-        for s in guide_steps:
-            if s.get("status") in ("complete", "skipped"):
-                marker = "✓"
-            elif s.get("id") == current_id:
-                marker = "→"
-            else:
-                marker = "○"
-            lines.append(f"  {marker} Step {s.get('step_number', '')}: {s.get('title', '')} [{s.get('section', '')}]")
-        parts.append("\n".join(lines))
+        next_step = None
+        if current_id:
+            seen_current = False
+            for s in guide_steps:
+                if seen_current and s.get("status") == "pending":
+                    next_step = s
+                    break
+                if s.get("id") == current_id:
+                    seen_current = True
+        bits = [f"{completed} of {total} steps complete"]
+        if current_step:
+            bits.append(
+                f"current: Step {current_step.get('step_number', '')} "
+                f"({current_step.get('title', '')})"
+            )
+        if next_step:
+            bits.append(
+                f"next: Step {next_step.get('step_number', '')} "
+                f"({next_step.get('title', '')})"
+            )
+        parts.append(f"\n\n[Setup progress] {'. '.join(bits)}.")
 
     if page_context and page_context.get("url"):
-        content = page_context.get("text", "")[:6000]
+        # Cap at 2000 chars (was 6000). Setup-guide answers rarely need the
+        # whole page — title + URL + a brief excerpt is enough orientation.
+        content = page_context.get("text", "")[:2000]
         parts.append(
             f"\n\n[Browser page]\n"
             f"Title: {page_context.get('title', 'Unknown')}\n"
@@ -172,7 +188,7 @@ def build_prompt(
 
     if history:
         parts.append("\n\n[Conversation so far]")
-        for turn in history[-8:]:
+        for turn in history[-6:]:
             role = "User" if turn.get("role") == "user" else "Assistant"
             parts.append(f"\n{role}: {turn.get('content', '')}")
 
