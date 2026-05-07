@@ -152,6 +152,30 @@ function InfoBanner({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ReviewSection({ label, rows, onEdit }: {
+  label: string;
+  rows: { label: string; value: string }[];
+  onEdit: () => void;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-semibold text-muted uppercase tracking-wider">{label}</span>
+        <button onClick={onEdit} className="text-xs text-primary hover:underline">Edit</button>
+      </div>
+      <div className="bg-surface-2 border border-border rounded-lg divide-y divide-border">
+        {rows.map(({ label: rowLabel, value }) => (
+          <div key={rowLabel} className="flex items-start gap-3 px-3 py-2.5">
+            <span className="text-xs text-muted w-28 flex-shrink-0 pt-0.5">{rowLabel}</span>
+            <span className="text-sm text-text">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function OnboardingPage() {
   const router = useRouter();
@@ -237,6 +261,10 @@ export default function OnboardingPage() {
   }
   function goBack() {
     setStepIndex(i => Math.max(i - 1, 0));
+  }
+  function goToStep(id: StepId) {
+    const idx = stepList.indexOf(id);
+    if (idx !== -1) setStepIndex(idx);
   }
 
   function canAdvance(): boolean {
@@ -930,33 +958,87 @@ use_case: useCase ?? "personal",
 
           {/* ── Review & Generate ── */}
           {currentStep === "review" && (
-            <div className="space-y-5">
-              <p className="text-muted text-sm">{meta.desc}</p>
-              <div className="space-y-2 text-sm">
-                {([
-                  ["Name", name || "(not set)"],
-                  ["OS", os],
-                  ["Use case", useCase ?? ""],
-categories.size > 0 && ["Focus areas", Array.from(categories).map(c => CATEGORIES.find(x => x.id === c)?.label).filter(Boolean).join(", ")],
-                  (googleGmail || microsoftOutlook) && ["Email", [googleGmail && "Gmail", microsoftOutlook && "Outlook"].filter(Boolean).join(", ")],
-                  emailAccounts.filter(a => a.email.trim()).length > 0 && ["Accounts", emailAccounts.filter(a => a.email.trim()).map(a => `${a.email} (${a.account_type})`).join(", ")],
-                  (googleCalendar || microsoftCalendar) && ["Calendar", [googleCalendar && "Google Calendar", microsoftCalendar && "Microsoft Calendar"].filter(Boolean).join(", ")],
-                  noteTakingTool && noteTakingTool !== "none" && ["Notes", noteTakingTool === "other" ? `Other: ${noteTakingOther}` : noteTakingTool.charAt(0).toUpperCase() + noteTakingTool.slice(1)],
-                  wantsBriefings && briefings.filter(b => b.title).length > 0 && ["Briefings", briefings.filter(b => b.title).map(b => `${b.title} at ${b.preferred_time}`).join(", ")],
-                  messagingApp && ["Messaging", messagingApp.charAt(0).toUpperCase() + messagingApp.slice(1)],
-                  creativeTools.size > 0 && ["Creative", Array.from(creativeTools).map(t => CREATIVE_TOOLS.find(x => x.id === t)?.label).filter(Boolean).join(", ")],
-                  financeTools.size > 0 && ["Finance", [...Array.from(financeTools).map(t => FINANCE_TOOLS.find(x => x.id === t)?.label).filter(Boolean), financeOther || null].filter(Boolean).join(", ")],
-                  goal && ["Goal", `"${goal.length > 80 ? goal.slice(0, 80) + "…" : goal}"`],
-                ] as (string[] | false)[]).filter(Boolean).map((row) => {
-                  const [label, value] = row as [string, string];
-                  return (
-                    <div key={label} className="flex gap-2">
-                      <span className="text-muted w-24 flex-shrink-0">{label}</span>
-                      <span className="text-text italic text-xs leading-5">{value}</span>
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="space-y-4">
+              <ReviewSection
+                label="About You"
+                onEdit={() => goToStep("about-you")}
+                rows={[
+                  { label: "Name", value: name || "(not set)" },
+                  { label: "OS", value: os === "mac" ? "macOS" : "Windows" },
+                  { label: "Setting up for", value: useCase === "work" ? "Work" : useCase === "personal" ? "Personal" : useCase === "both" ? "Work & personal" : "" },
+                ].filter(r => r.value)}
+              />
+              <ReviewSection
+                label="Setup"
+                onEdit={() => goToStep("quick-check")}
+                rows={([
+                  hasClaudeAccount !== null && { label: "Claude account", value: hasClaudeAccount ? "Yes" : "Not yet" },
+                  hasClaudeDesktop !== null && { label: "Claude Desktop", value: hasClaudeDesktop ? "Installed" : "Not installed" },
+                  hasAdminAccess !== null && { label: "Admin access", value: hasAdminAccess ? "Yes" : "Limited / IT-managed" },
+                ] as (false | { label: string; value: string })[]).filter(Boolean) as { label: string; value: string }[]}
+              />
+              {categories.size > 0 && (
+                <ReviewSection
+                  label="Interests"
+                  onEdit={() => goToStep("categories")}
+                  rows={[{ label: "Focus areas", value: Array.from(categories).map(c => CATEGORIES.find(x => x.id === c)?.label).filter(Boolean).join(", ") }]}
+                />
+              )}
+              {stepList.includes("productivity") && (
+                <ReviewSection
+                  label="Productivity"
+                  onEdit={() => goToStep("productivity")}
+                  rows={([
+                    (googleGmail || microsoftOutlook) && { label: "Email", value: [googleGmail && "Gmail", microsoftOutlook && "Outlook"].filter(Boolean).join(", ") },
+                    emailAccounts.filter(a => a.email.trim()).length > 0 && { label: "Accounts", value: emailAccounts.filter(a => a.email.trim()).map(a => `${a.email} (${a.account_type})`).join(", ") },
+                    (googleCalendar || microsoftCalendar) && { label: "Calendar", value: [googleCalendar && "Google Calendar", microsoftCalendar && "Microsoft Calendar"].filter(Boolean).join(", ") },
+                    noteTakingTool && noteTakingTool !== "none" && { label: "Notes", value: noteTakingTool === "other" ? `Other: ${noteTakingOther}` : noteTakingTool.charAt(0).toUpperCase() + noteTakingTool.slice(1) },
+                    wantsBriefings && briefings.filter(b => b.title).length > 0 && { label: "Briefings", value: briefings.filter(b => b.title).map(b => `${b.title} at ${b.preferred_time}`).join(", ") },
+                    messagingApp && { label: "Messaging", value: messagingApp.charAt(0).toUpperCase() + messagingApp.slice(1) },
+                  ] as (false | { label: string; value: string })[]).filter(Boolean) as { label: string; value: string }[]}
+                />
+              )}
+              {stepList.includes("docs") && (
+                <ReviewSection
+                  label="Documents"
+                  onEdit={() => goToStep("docs")}
+                  rows={([
+                    wantsDocEditing && { label: "Editing", value: "Document drafting & editing" },
+                    wantsFileOrganization && { label: "Files", value: "File organization" },
+                  ] as (false | { label: string; value: string })[]).filter(Boolean) as { label: string; value: string }[]}
+                />
+              )}
+              {stepList.includes("app-dev") && (
+                <ReviewSection
+                  label="App Development"
+                  onEdit={() => goToStep("app-dev")}
+                  rows={([
+                    (github || supabaseDb || vercel) && { label: "Tools", value: [github && "GitHub", supabaseDb && "Supabase", vercel && "Vercel"].filter(Boolean).join(", ") },
+                    appUserCount && { label: "User scale", value: appUserCount },
+                  ] as (false | { label: string; value: string })[]).filter(Boolean) as { label: string; value: string }[]}
+                />
+              )}
+              {stepList.includes("finance") && financeTools.size > 0 && (
+                <ReviewSection
+                  label="Finance"
+                  onEdit={() => goToStep("finance")}
+                  rows={[{ label: "Tools", value: [...Array.from(financeTools).map(t => FINANCE_TOOLS.find(x => x.id === t)?.label).filter(Boolean), financeOther || null].filter(Boolean).join(", ") }]}
+                />
+              )}
+              {stepList.includes("creative") && creativeTools.size > 0 && (
+                <ReviewSection
+                  label="Creative Tools"
+                  onEdit={() => goToStep("creative")}
+                  rows={[{ label: "Tools", value: Array.from(creativeTools).map(t => CREATIVE_TOOLS.find(x => x.id === t)?.label).filter(Boolean).join(", ") }]}
+                />
+              )}
+              {goal && (
+                <ReviewSection
+                  label="Your Goal"
+                  onEdit={() => goToStep("goal")}
+                  rows={[{ label: "Goal", value: goal }]}
+                />
+              )}
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-error text-xs">{error}</div>
               )}
