@@ -83,8 +83,10 @@ chrome.runtime.onConnect.addListener((sidePanelPort) => {
   sidePanelPort.onMessage.addListener(async (msg) => {
     if (msg.type === "cancel") {
       if (nativePort) { try { nativePort.postMessage({ type: "cancel" }); } catch {} }
+      // Tell the side panel BEFORE cleanup — cleanup sets cancelled=true,
+      // which would otherwise gate safePost from delivering this message.
+      try { sidePanelPort.postMessage({ type: "cancelled" }); } catch {}
       cleanup();
-      safePost({ type: "cancelled" });
       return;
     }
     if (msg.type !== "chat") return;
