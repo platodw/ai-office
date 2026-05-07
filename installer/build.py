@@ -73,6 +73,7 @@ def find_iscc() -> Path | None:
     candidates = [
         Path(r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"),
         Path(r"C:\Program Files\Inno Setup 6\ISCC.exe"),
+        Path(os.path.expandvars(r"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe")),
     ]
     on_path = shutil.which("ISCC")
     if on_path:
