@@ -49,12 +49,27 @@ def find_claude() -> str:
 CLAUDE_BIN = find_claude()
 
 
-def build_prompt(message: str, history: list, page_context: dict, current_step: dict | None) -> str:
+def build_prompt(message: str, history: list, page_context: dict, current_step: dict | None, guide_steps: list) -> str:
     parts = [SYSTEM_PROMPT]
+
+    if guide_steps:
+        completed = sum(1 for s in guide_steps if s.get("status") in ("complete", "skipped"))
+        total = len(guide_steps)
+        lines = [f"\n\n[User's setup guide — {completed}/{total} steps complete]"]
+        current_id = (current_step or {}).get("id")
+        for s in guide_steps:
+            if s.get("status") in ("complete", "skipped"):
+                marker = "✓"
+            elif s.get("id") == current_id:
+                marker = "→"
+            else:
+                marker = "○"
+            lines.append(f"  {marker} Step {s.get('step_number', '')}: {s.get('title', '')} [{s.get('section', '')}]")
+        parts.append("\n".join(lines))
 
     if current_step:
         parts.append(
-            f"\n\n[Current setup step]\n"
+            f"\n\n[Currently working on]\n"
             f"Title: {current_step.get('title', '')}\n"
             f"Description: {current_step.get('description', '')}\n"
             "If the user's question relates to this step, prioritize relevant guidance."
@@ -154,6 +169,7 @@ class Handler(BaseHTTPRequestHandler):
                 history=body.get("history") or [],
                 page_context=body.get("page_context") or {},
                 current_step=body.get("current_step"),
+                guide_steps=body.get("guide_steps") or [],
             )
             response = run_claude(prompt)
             self.send_json(200, {"response": response})

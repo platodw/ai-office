@@ -46,10 +46,19 @@ export async function GET(request: Request) {
     }
   }
 
+  const allSteps = guide
+    ? (await supabase
+        .from("setup_steps")
+        .select("id, step_number, section, title, status")
+        .eq("guide_id", guide.id)
+        .order("step_number")).data ?? []
+    : [];
+
   return NextResponse.json({
     connected: true,
     has_guide: !!guide,
     current_step: currentStep,
+    all_steps: allSteps,
     progress: { total: totalSteps, completed: completedSteps },
   });
 }

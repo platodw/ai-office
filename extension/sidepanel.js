@@ -15,6 +15,7 @@ const DEFAULT_ACTIONS = [
 let serverUrl = "http://127.0.0.1:7848";
 let accountToken = "";
 let currentStep = null;
+let guideSteps = [];
 let pageContext = null;
 let messages = [];
 
@@ -157,6 +158,7 @@ async function loadCurrentStep() {
     if (!res.ok) return;
     const data = await res.json();
     currentStep = data.current_step ?? null;
+    guideSteps = data.all_steps ?? [];
     renderCurrentStep();
   } catch { /* non-fatal */ }
 }
@@ -213,7 +215,13 @@ async function sendMessage() {
     const res = await fetch(`${serverUrl}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, page_context: pageContext, history: messages.slice(-10), current_step: stepContext })
+      body: JSON.stringify({
+        message: text,
+        page_context: pageContext,
+        history: messages.slice(-10),
+        current_step: stepContext,
+        guide_steps: guideSteps,
+      })
     });
     thinkingEl.remove();
     if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -238,10 +246,47 @@ async function sendWithPrompt(prompt) {
   await sendMessage();
 }
 
+function renderMarkdown(text) {
+  // Escape HTML
+  let s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Code blocks
+  s = s.replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  // Inline formatting
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // Lists — process line by line
+  const lines = s.split('\n');
+  const out = [];
+  let inUl = false, inOl = false;
+  for (const line of lines) {
+    const ulM = line.match(/^- (.+)/);
+    const olM = line.match(/^(\d+)\. (.+)/);
+    if (ulM) {
+      if (!inUl) { if (inOl) { out.push('</ol>'); inOl = false; } out.push('<ul>'); inUl = true; }
+      out.push(`<li>${ulM[1]}</li>`);
+    } else if (olM) {
+      if (!inOl) { if (inUl) { out.push('</ul>'); inUl = false; } out.push('<ol>'); inOl = true; }
+      out.push(`<li>${olM[2]}</li>`);
+    } else {
+      if (inUl) { out.push('</ul>'); inUl = false; }
+      if (inOl) { out.push('</ol>'); inOl = false; }
+      out.push(line);
+    }
+  }
+  if (inUl) out.push('</ul>');
+  if (inOl) out.push('</ol>');
+  return out.join('\n').replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>');
+}
+
 function appendMessage(role, text) {
   const el = document.createElement("div");
   el.className = `message ${role}`;
-  el.textContent = text;
+  if (role === "assistant") {
+    el.innerHTML = renderMarkdown(text);
+  } else {
+    el.textContent = text;
+  }
   document.getElementById("messages").appendChild(el);
   el.scrollIntoView({ behavior: "smooth", block: "end" });
   return el;
