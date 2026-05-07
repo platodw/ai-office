@@ -379,7 +379,14 @@ async function sendMessage() {
 
   // Replace the static "Thinking..." with a live elapsed-time indicator + Cancel.
   thinkingEl.remove();
-  const { container: progressEl, setElapsed, showCancel } = appendThinkingProgress();
+  const port = chrome.runtime.connect({ name: "chat" });
+  let cancelledByUser = false;
+
+  const { container: progressEl, setElapsed, showCancel } = appendThinkingProgress(() => {
+    cancelledByUser = true;
+    try { port.postMessage({ type: "cancel" }); } catch {}
+  });
+
   let assistantEl = null;
   let assistantText = "";
   const startTs = Date.now();
@@ -388,9 +395,6 @@ async function sendMessage() {
     setElapsed(secs);
     if (secs >= 5) showCancel();
   }, 500);
-
-  const port = chrome.runtime.connect({ name: "chat" });
-  let cancelledByUser = false;
 
   function ensureAssistantEl() {
     if (assistantEl) return assistantEl;
@@ -417,11 +421,6 @@ async function sendMessage() {
     }
     sendBtn.disabled = false;
   }
-
-  document.getElementById("cancel-chat-btn")?.addEventListener("click", () => {
-    cancelledByUser = true;
-    try { port.postMessage({ type: "cancel" }); } catch {}
-  });
 
   port.onMessage.addListener((m) => {
     if (m.type === "chunk") {
@@ -458,18 +457,26 @@ async function sendMessage() {
 
 // Renders the in-place "Thinking… 12s [Cancel]" indicator that replaces the
 // static dots while a chat is streaming.
-function appendThinkingProgress() {
+function appendThinkingProgress(onCancel) {
   const container = document.createElement("div");
   container.className = "message thinking";
+  // No IDs — this can render multiple times per session, and we wire the
+  // cancel listener directly to the button created here so subsequent
+  // turns don't bind to a stale element from an earlier turn.
   container.innerHTML = `
     <span class="thinking-label">Thinking…</span>
-    <span class="thinking-elapsed" id="thinking-elapsed"></span>
-    <button id="cancel-chat-btn" class="thinking-cancel hidden" title="Cancel">Cancel</button>
+    <span class="thinking-elapsed"></span>
+    <button class="thinking-cancel hidden" title="Cancel">Cancel</button>
   `;
   document.getElementById("messages").appendChild(container);
   container.scrollIntoView({ behavior: "smooth", block: "end" });
-  const elapsedEl = container.querySelector("#thinking-elapsed");
-  const cancelBtn = container.querySelector("#cancel-chat-btn");
+  const elapsedEl = container.querySelector(".thinking-elapsed");
+  const cancelBtn = container.querySelector(".thinking-cancel");
+  cancelBtn.addEventListener("click", () => {
+    cancelBtn.disabled = true;
+    cancelBtn.textContent = "Cancelling…";
+    if (onCancel) onCancel();
+  });
   return {
     container,
     setElapsed: (s) => { elapsedEl.textContent = s >= 1 ? `${s}s` : ""; },

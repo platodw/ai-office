@@ -37,6 +37,11 @@ export function applyEdit(
     );
   }
 
-  const newBlock = block.replace(currentValue, proposedValue);
+  // Escape the proposed value so it stays valid inside the surrounding
+  // double-quoted TypeScript string literal. JSON.stringify gives us
+  // exactly the right escapes ("\\", "\"", "\n", control chars); strip the
+  // outer quotes so we splice the contents into the existing string.
+  const escapedProposed = JSON.stringify(proposedValue).slice(1, -1);
+  const newBlock = block.replace(currentValue, escapedProposed);
   return fileContent.slice(0, start) + newBlock + fileContent.slice(end);
 }
