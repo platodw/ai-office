@@ -146,57 +146,58 @@ body {
   min-width: 0;
 }
 
-/* Active step pill — bronze accent, inline with page pill */
-.step-pill {
-  display: inline-flex;
+/* ── Active step bar (own full-width row) ── */
+.step-bar {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  padding: 5px 14px;
   background: var(--ao-accent-soft);
-  border: 1px solid var(--ao-accent);
-  border-radius: var(--ao-radius-pill);
-  padding: 3px 4px 3px 9px;
-  flex: 0 1 auto;
+  border-bottom: 1px solid color-mix(in srgb, var(--ao-accent) 35%, transparent);
+  flex-shrink: 0;
   min-width: 0;
-  max-width: 60%;
 }
-.step-pill-label {
+.step-bar-label {
   font-size: 9px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ao-accent);
   flex-shrink: 0;
 }
-.step-pill-title {
+.step-bar-title {
   font-size: var(--ao-text-xs);
   color: var(--ao-ink);
   font-weight: 500;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .step-expand-btn {
   background: none;
   border: none;
   color: var(--ao-accent);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
-  padding: 0 2px;
+  padding: 1px 3px;
   flex-shrink: 0;
   font-family: inherit;
-  opacity: 0.75;
-  transition: opacity var(--ao-dur-fast) var(--ao-ease), transform var(--ao-dur-fast) var(--ao-ease);
+  opacity: 0.7;
+  transition: opacity var(--ao-dur-fast) var(--ao-ease), transform 180ms var(--ao-ease);
 }
 .step-expand-btn:hover { opacity: 1; }
 .step-expand-btn.open { transform: rotate(180deg); opacity: 1; }
 
-.step-pill-divider {
+.step-bar-divider {
   width: 1px;
-  height: 12px;
+  height: 13px;
   background: var(--ao-accent);
-  opacity: 0.3;
+  opacity: 0.25;
   flex-shrink: 0;
-  margin: 0 4px;
+  margin: 0 2px;
 }
 
 .step-complete-btn {
@@ -204,7 +205,7 @@ body {
   border: none;
   color: #fff;
   border-radius: 50%;
-  width: 18px; height: 18px;
+  width: 19px; height: 19px;
   font-size: 10px;
   line-height: 1;
   cursor: pointer;
@@ -215,19 +216,34 @@ body {
 }
 .step-complete-btn:hover { background: var(--ao-accent-hover); }
 
-/* Step instructions dropdown */
+/* Step instructions slide-down */
 .step-detail {
   background: var(--ao-accent-soft);
-  border-bottom: 1px solid var(--ao-accent);
-  padding: 10px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ao-accent) 25%, transparent);
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 220ms cubic-bezier(0.4, 0, 0.2, 1),
+              padding 220ms cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
+  padding: 0 14px;
+}
+.step-detail.open {
+  max-height: 320px;
+  padding: 10px 14px 13px;
 }
 .step-detail-body {
   font-size: var(--ao-text-xs);
   color: var(--ao-ink-2);
-  line-height: 1.6;
-  white-space: pre-wrap;
+  line-height: 1.65;
+  overflow-y: auto;
+  max-height: 295px;
 }
+.step-detail-body p { margin: 0 0 6px; }
+.step-detail-body p:last-child { margin-bottom: 0; }
+.step-detail-body ul, .step-detail-body ol { margin: 4px 0 6px; padding-left: 16px; }
+.step-detail-body li { margin-bottom: 3px; }
+.step-detail-body strong { font-weight: 600; color: var(--ao-ink); }
+.step-detail-body code { font-family: monospace; font-size: 0.9em; background: rgba(0,0,0,0.07); padding: 1px 4px; border-radius: 3px; }
 
 /* ── Quick Actions ── */
 .quick-actions {

@@ -299,31 +299,32 @@ async function loadCurrentStep() {
 }
 
 function renderCurrentStep() {
-  const pill = document.getElementById("step-pill");
-  const titleEl = document.getElementById("step-pill-title");
+  const bar = document.getElementById("step-bar");
+  const titleEl = document.getElementById("step-bar-title");
   const detail = document.getElementById("step-detail");
   const detailBody = document.getElementById("step-detail-body");
-  if (!pill || !titleEl) return;
+  if (!bar || !titleEl) return;
   if (!currentStep) {
-    pill.classList.add("hidden");
-    if (detail) detail.classList.add("hidden");
+    bar.classList.add("hidden");
+    if (detail) detail.classList.remove("open");
     return;
   }
   const num = currentStep.step_number ? `${currentStep.step_number}. ` : "";
   titleEl.textContent = `${num}${currentStep.title}`;
   titleEl.title = currentStep.title;
   if (detailBody) {
-    detailBody.textContent = currentStep.description || currentStep.title;
+    const content = currentStep.description || currentStep.instructions || currentStep.content || currentStep.title;
+    detailBody.innerHTML = renderMarkdown(content);
   }
-  pill.classList.remove("hidden");
+  bar.classList.remove("hidden");
 }
 
 function toggleStepDetail() {
   const detail = document.getElementById("step-detail");
   const btn = document.getElementById("step-expand-btn");
   if (!detail || !btn) return;
-  const open = detail.classList.toggle("hidden");  // toggle returns true if class was added (now hidden)
-  btn.classList.toggle("open", !open);
+  const isOpen = detail.classList.toggle("open");
+  btn.classList.toggle("open", isOpen);
 }
 
 async function markStepComplete(stepId) {
