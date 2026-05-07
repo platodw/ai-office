@@ -377,36 +377,104 @@ async function sendMessage() {
     ? { id: currentStep.id, title: currentStep.title, description: currentStep.description }
     : null;
 
-  try {
-    const res = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({
-        type: "chat",
-        payload: {
-          message: text,
-          page_context: pageContext,
-          history: messages.slice(-10),
-          current_step: stepContext,
-          guide_steps: guideSteps,
-          user_profile: userProfile,
-          user_questionnaire: userQuestionnaire,
-        },
-      }, (response) => resolve(response));
-    });
-    thinkingEl.remove();
-    if (!res || !res.ok) {
-      const errMsg = (res && res.error) || "Could not reach AI Office companion";
-      appendMessage("error", `Error: ${errMsg}. Is the companion running?`);
-      return;
+  // Replace the static "Thinking..." with a live elapsed-time indicator + Cancel.
+  thinkingEl.remove();
+  const { container: progressEl, setElapsed, showCancel } = appendThinkingProgress();
+  let assistantEl = null;
+  let assistantText = "";
+  const startTs = Date.now();
+  const tick = setInterval(() => {
+    const secs = Math.round((Date.now() - startTs) / 1000);
+    setElapsed(secs);
+    if (secs >= 5) showCancel();
+  }, 500);
+
+  const port = chrome.runtime.connect({ name: "chat" });
+  let cancelledByUser = false;
+
+  function ensureAssistantEl() {
+    if (assistantEl) return assistantEl;
+    progressEl.remove();
+    clearInterval(tick);
+    assistantEl = appendMessage("assistant", "");
+    return assistantEl;
+  }
+
+  function finish({ error } = {}) {
+    clearInterval(tick);
+    try { port.disconnect(); } catch {}
+    if (assistantEl && assistantText) {
+      messages.push({ role: "assistant", content: assistantText });
     }
-    const reply = res.response || "(no response)";
-    appendMessage("assistant", reply);
-    messages.push({ role: "assistant", content: reply });
-  } catch (err) {
-    thinkingEl.remove();
-    appendMessage("error", `Error: ${err.message || err}`);
-  } finally {
+    if (error && !assistantEl) {
+      progressEl.remove();
+      appendMessage("error", error);
+    } else if (error && assistantEl) {
+      const note = document.createElement("div");
+      note.className = "message error";
+      note.textContent = error;
+      assistantEl.parentNode.appendChild(note);
+    }
     sendBtn.disabled = false;
   }
+
+  document.getElementById("cancel-chat-btn")?.addEventListener("click", () => {
+    cancelledByUser = true;
+    try { port.postMessage({ type: "cancel" }); } catch {}
+  });
+
+  port.onMessage.addListener((m) => {
+    if (m.type === "chunk") {
+      ensureAssistantEl();
+      assistantText += m.text;
+      assistantEl.innerHTML = renderMarkdown(assistantText);
+      assistantEl.scrollIntoView({ behavior: "smooth", block: "end" });
+    } else if (m.type === "done") {
+      finish();
+    } else if (m.type === "cancelled") {
+      finish({ error: "Cancelled." });
+    } else if (m.type === "error") {
+      finish({ error: m.error || "Something went wrong." });
+    }
+  });
+
+  port.onDisconnect.addListener(() => {
+    if (!cancelledByUser) finish({ error: "Lost connection to the companion." });
+  });
+
+  port.postMessage({
+    type: "chat",
+    payload: {
+      message: text,
+      page_context: pageContext,
+      history: messages.slice(-10),
+      current_step: stepContext,
+      guide_steps: guideSteps,
+      user_profile: userProfile,
+      user_questionnaire: userQuestionnaire,
+    },
+  });
+}
+
+// Renders the in-place "Thinking… 12s [Cancel]" indicator that replaces the
+// static dots while a chat is streaming.
+function appendThinkingProgress() {
+  const container = document.createElement("div");
+  container.className = "message thinking";
+  container.innerHTML = `
+    <span class="thinking-label">Thinking…</span>
+    <span class="thinking-elapsed" id="thinking-elapsed"></span>
+    <button id="cancel-chat-btn" class="thinking-cancel hidden" title="Cancel">Cancel</button>
+  `;
+  document.getElementById("messages").appendChild(container);
+  container.scrollIntoView({ behavior: "smooth", block: "end" });
+  const elapsedEl = container.querySelector("#thinking-elapsed");
+  const cancelBtn = container.querySelector("#cancel-chat-btn");
+  return {
+    container,
+    setElapsed: (s) => { elapsedEl.textContent = s >= 1 ? `${s}s` : ""; },
+    showCancel: () => cancelBtn.classList.remove("hidden"),
+  };
 }
 
 async function sendWithPrompt(prompt) {

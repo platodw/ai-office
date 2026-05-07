@@ -55,13 +55,109 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ ok: true });
     return false;
   }
-  if (msg.type === "chat") {
-    handleChat(msg.payload)
-      .then((res) => sendResponse({ ok: true, ...res }))
-      .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
-    return true;
-  }
   return false;
+});
+
+// ── Streaming chat (long-lived port) ─────────────────────────────────────────
+// Side panel opens a port named "chat" per turn; we forward streaming chunks
+// from the native host (or fall back to a one-shot HTTP request).
+chrome.runtime.onConnect.addListener((sidePanelPort) => {
+  if (sidePanelPort.name !== "chat") return;
+  let nativePort = null;
+  let httpAbort = null;
+  let cancelled = false;
+
+  const cleanup = () => {
+    cancelled = true;
+    if (nativePort) { try { nativePort.disconnect(); } catch {} nativePort = null; }
+    if (httpAbort) { try { httpAbort.abort(); } catch {} httpAbort = null; }
+  };
+
+  sidePanelPort.onDisconnect.addListener(cleanup);
+
+  function safePost(p) {
+    if (cancelled) return;
+    try { sidePanelPort.postMessage(p); } catch {}
+  }
+
+  sidePanelPort.onMessage.addListener(async (msg) => {
+    if (msg.type === "cancel") {
+      if (nativePort) { try { nativePort.postMessage({ type: "cancel" }); } catch {} }
+      cleanup();
+      safePost({ type: "cancelled" });
+      return;
+    }
+    if (msg.type !== "chat") return;
+
+    // Try Native Messaging, fall back to HTTP if it's not registered.
+    if (status.transport === "native" || status.transport === null) {
+      try {
+        await streamViaNative(msg.payload);
+        return;
+      } catch {
+        if (cancelled) return;
+      }
+    }
+    await streamViaHttp(msg.payload);
+  });
+
+  function streamViaNative(payload) {
+    return new Promise((resolve, reject) => {
+      let port;
+      try { port = chrome.runtime.connectNative(NATIVE_HOST); }
+      catch (err) { reject(err); return; }
+      nativePort = port;
+      let settled = false;
+      const settle = (fn) => { if (!settled) { settled = true; fn(); } };
+
+      port.onMessage.addListener((m) => {
+        if (cancelled) return;
+        if (m.type === "chat_chunk") safePost({ type: "chunk", text: m.text });
+        else if (m.type === "chat_done") {
+          safePost({ type: "done", mode: m.mode });
+          settle(resolve);
+          try { port.disconnect(); } catch {}
+        } else if (m.type === "chat_error") {
+          safePost({ type: "error", error: m.error });
+          settle(resolve);
+          try { port.disconnect(); } catch {}
+        }
+      });
+      port.onDisconnect.addListener(() => {
+        const err = chrome.runtime.lastError;
+        if (!settled) {
+          if (err && err.message) settle(() => reject(new Error(err.message)));
+          else { safePost({ type: "error", error: "Companion disconnected" }); settle(resolve); }
+        }
+      });
+
+      try { port.postMessage({ type: "chat", ...payload }); }
+      catch (err) { settle(() => reject(err)); }
+    });
+  }
+
+  async function streamViaHttp(payload) {
+    httpAbort = new AbortController();
+    try {
+      const res = await fetch(`${httpUrl}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: httpAbort.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (cancelled) return;
+      if (data.response) safePost({ type: "chunk", text: data.response });
+      safePost({ type: "done", mode: data.mode || "claude_desktop" });
+    } catch (err) {
+      if (cancelled) return;
+      const m = (err && err.message) || String(err);
+      safePost({ type: "error", error: `Could not reach companion: ${m}` });
+    } finally {
+      httpAbort = null;
+    }
+  }
 });
 
 // ── Native Messaging ─────────────────────────────────────────────────────────
@@ -182,27 +278,5 @@ function setStatus(next) {
   }
 }
 
-async function handleChat(payload) {
-  // Prefer the last working transport, fall back to the other on failure.
-  const tryNative = async () => {
-    const res = await nativeRequest({ type: "chat", ...payload });
-    if (res && res.type === "chat") return { response: res.response, mode: res.mode };
-    if (res && res.type === "error") throw new Error(res.error);
-    throw new Error("Unexpected native host response");
-  };
-  const tryHttp = async () => {
-    const res = await httpChat(payload);
-    return { response: res.response, mode: res.mode };
-  };
-
-  const order = status.transport === "http"
-    ? [tryHttp, tryNative]
-    : [tryNative, tryHttp];
-
-  let lastErr;
-  for (const attempt of order) {
-    try { return await attempt(); }
-    catch (err) { lastErr = err; }
-  }
-  throw lastErr || new Error("No working transport");
-}
+// handleChat removed — chat now flows through the streaming port handler
+// above. nativeRequest is still used by refreshStatus().
