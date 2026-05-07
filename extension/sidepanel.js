@@ -320,9 +320,23 @@ function renderMarkdown(text) {
     return `\x00P${protected_.length - 1}\x00`;
   });
 
+  // Full URLs with protocol
   s = s.replace(/https?:\/\/[^\s<>")\]]+/g, url => {
-    const safeHref = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-    protected_.push({ type: 'url', content: `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${url.replace(/&/g, '&amp;')}</a>` });
+    const cleanUrl = url.replace(/[.,;:!?)\]]+$/, "");
+    const trail = url.slice(cleanUrl.length);
+    const safeHref = cleanUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    protected_.push({ type: 'url', content: `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${cleanUrl.replace(/&/g, '&amp;')}</a>${trail}` });
+    return `\x00P${protected_.length - 1}\x00`;
+  });
+
+  // Bare domains like nodejs.org, claude.ai, console.anthropic.com
+  // Match: word chars/hyphens, dots, common TLDs, optional /path
+  s = s.replace(/\b([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^\s<>")\]]*)?/gi, (match, domain, path) => {
+    if (!/\.(com|org|net|io|ai|app|dev|co|gov|edu|us|uk|ca|me|tv|info|tools|cloud|so|sh|page|tech|company|run)(\b|$)/i.test(domain)) return match;
+    const url = (path ? domain + path : domain).replace(/[.,;:!?)\]]+$/, "");
+    const trail = (path ? domain + path : domain).slice(url.length);
+    const safeHref = "https://" + url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    protected_.push({ type: 'url', content: `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${url.replace(/&/g, '&amp;')}</a>${trail}` });
     return `\x00P${protected_.length - 1}\x00`;
   });
 
