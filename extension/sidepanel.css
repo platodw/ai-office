@@ -244,6 +244,10 @@ body {
 .step-detail-body li { margin-bottom: 3px; }
 .step-detail-body strong { font-weight: 600; color: var(--ao-ink); }
 .step-detail-body code { font-family: monospace; font-size: 0.9em; background: rgba(0,0,0,0.07); padding: 1px 4px; border-radius: 3px; }
+.step-detail-why { color: var(--ao-ink-soft); font-style: italic; margin-bottom: 7px !important; }
+.step-detail-note { color: var(--ao-ink-soft); margin-top: 6px !important; }
+.step-detail-links { margin-top: 8px !important; }
+.step-detail-links a { color: var(--ao-accent); text-decoration: underline; }
 
 /* ── Quick Actions ── */
 .quick-actions {

@@ -313,10 +313,36 @@ function renderCurrentStep() {
   titleEl.textContent = `${num}${currentStep.title}`;
   titleEl.title = currentStep.title;
   if (detailBody) {
-    const content = currentStep.description || currentStep.instructions || currentStep.content || currentStep.title;
-    detailBody.innerHTML = renderMarkdown(content);
+    detailBody.innerHTML = renderStepDetail(currentStep);
   }
   bar.classList.remove("hidden");
+}
+
+function renderStepDetail(step) {
+  const parts = [];
+  if (step.why) {
+    parts.push(`<p class="step-detail-why">${escapeHtml(step.why)}</p>`);
+  }
+  if (step.click_steps?.length) {
+    parts.push(`<ol>${step.click_steps.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ol>`);
+  }
+  if (step.notes?.length) {
+    parts.push(step.notes.map(n => `<p class="step-detail-note">💡 ${escapeHtml(n)}</p>`).join(""));
+  }
+  if (step.links?.length) {
+    const linkHtml = step.links.map(l => {
+      const safe = l.url.replace(/"/g, "&quot;");
+      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)}</a>`;
+    }).join(" · ");
+    parts.push(`<p class="step-detail-links">${linkHtml}</p>`);
+  }
+  return parts.length ? parts.join("") : `<p>${escapeHtml(step.description || step.title)}</p>`;
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function toggleStepDetail() {
