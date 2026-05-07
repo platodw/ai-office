@@ -71,18 +71,26 @@ export async function POST() {
     .from("template_suggestions")
     .select("triggering_question")
     .eq("status", "pending");
-  const seenQuestions = new Set((existing || []).map(s => s.triggering_question));
+  const seenQuestions = new Set(
+    ((existing || []) as { triggering_question: string }[]).map(s => s.triggering_question),
+  );
 
   // The extension sends the setup_steps.id (DB UUID), not the template id, so
   // resolve UUID → title → template. We cache the title lookup per step_id.
-  const stepIds = [...new Set(events.map(e => e.step_id).filter((x): x is string => !!x))];
+  const stepIds = [...new Set(
+    (events as { step_id: string | null }[])
+      .map(e => e.step_id)
+      .filter((x): x is string => !!x),
+  )];
   const titleByStepId: Record<string, string> = {};
   if (stepIds.length > 0) {
     const { data: rows } = await supabase
       .from("setup_steps")
       .select("id, title")
       .in("id", stepIds);
-    for (const r of rows || []) titleByStepId[r.id] = r.title;
+    for (const r of (rows || []) as { id: string; title: string }[]) {
+      titleByStepId[r.id] = r.title;
+    }
   }
 
   function templateFor(stepId: string) {
@@ -120,7 +128,7 @@ ${JSON.stringify({
 }, null, 2)}
 
 Recent user questions while on this step:
-${stepEvents.slice(0, 20).map((e, i) => `${i + 1}. (domain: ${e.page_domain || "unknown"}) ${e.scrubbed_prompt}`).join("\n")}`;
+${stepEvents.slice(0, 20).map((e: { page_domain: string | null; scrubbed_prompt: string }, i: number) => `${i + 1}. (domain: ${e.page_domain || "unknown"}) ${e.scrubbed_prompt}`).join("\n")}`;
 
     analyzed += stepEvents.length;
 
