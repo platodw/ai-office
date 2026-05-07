@@ -21,6 +21,10 @@ let userProfile = null;
 let userQuestionnaire = null;
 let pageContext = null;
 let messages = [];
+let companionStatus = { connected: false, mode: "not_connected", label: "Checking your setup…", ready: false, transport: null };
+
+const NOT_CONNECTED_HINT =
+  "Install Claude Code from claude.ai/download, then run the AI Office companion installer.";
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
@@ -72,11 +76,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   chrome.runtime.sendMessage({ type: "get_status" }, (res) => {
-    if (res) { serverUrl = res.serverUrl || serverUrl; updateMcpDot(res.connected); }
+    if (res) {
+      if (res.httpUrl) serverUrl = res.httpUrl;
+      applyStatus(res);
+    }
   });
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "status_update") updateMcpDot(msg.connected);
+    if (msg.type === "status_update") applyStatus(msg);
   });
+  chrome.runtime.sendMessage({ type: "refresh_status" }).catch(() => {});
 
   chrome.tabs.onActivated.addListener(() => handleTabChange());
   chrome.tabs.onUpdated.addListener((id, info, tab) => {
@@ -109,24 +117,81 @@ async function connect() {
   const urlVal = document.getElementById("server-url-input").value.trim();
   const webUrlVal = document.getElementById("web-app-url-input").value.trim();
   const tokenVal = document.getElementById("account-token-input").value.trim();
-  if (urlVal) serverUrl = urlVal;
+  if (urlVal && urlVal !== serverUrl) {
+    serverUrl = urlVal;
+    chrome.runtime.sendMessage({ type: "set_http_url", url: serverUrl });
+  }
   if (webUrlVal) webAppUrl = webUrlVal.replace(/\/$/, "");
   if (tokenVal) accountToken = tokenVal;
 
-  try {
-    const res = await fetch(`${serverUrl}/status`, { signal: AbortSignal.timeout(4000) });
-    const data = await res.json();
-    if (data.connected !== false) {
-      await chrome.storage.local.set({ server_url: serverUrl, web_app_url: webAppUrl, account_token: accountToken, configured: true });
-      chrome.runtime.sendMessage({ type: "set_server_url", url: serverUrl });
-      showChatScreen();
-      await loadPageContext();
-      await loadCurrentStep();
-    } else {
-      alert("Server responded but reported not connected. Check your Claude setup.");
-    }
-  } catch (err) {
-    alert(`Could not reach ${serverUrl}\n\nMake sure the AI Office companion server is running.`);
+  // Re-check status before continuing so we surface the latest state.
+  const fresh = await new Promise((resolve) =>
+    chrome.runtime.sendMessage({ type: "refresh_status" }, (res) => resolve(res || companionStatus))
+  );
+  applyStatus(fresh);
+
+  if (!fresh.connected) {
+    setSetupHint("Couldn't reach the AI Office companion. Install it, then click Continue.");
+    return;
+  }
+
+  await chrome.storage.local.set({
+    server_url: serverUrl,
+    web_app_url: webAppUrl,
+    account_token: accountToken,
+    configured: true,
+  });
+  showChatScreen();
+  await loadPageContext();
+  await loadCurrentStep();
+}
+
+// ── Setup status banner ──────────────────────────────────────────────────────
+function applyStatus(s) {
+  if (!s) return;
+  companionStatus = { ...companionStatus, ...s };
+  updateMcpDot(s.connected);
+  renderSetupStatus();
+}
+
+function renderSetupStatus() {
+  const banner = document.getElementById("setup-status");
+  const text = document.getElementById("setup-status-text");
+  if (!banner || !text) return;
+  let state = "checking";
+  let label = companionStatus.label || "Checking your setup…";
+  let hint = "";
+
+  if (!companionStatus.connected) {
+    state = "error";
+    label = "Companion not running";
+    hint = NOT_CONNECTED_HINT;
+  } else if (companionStatus.mode === "claude_desktop") {
+    state = "ready";
+    label = "Claude Desktop is connected — you'll use your Claude subscription.";
+  } else if (companionStatus.mode === "anthropic_api") {
+    state = companionStatus.ready ? "ready" : "warning";
+    label = "Connected — using your Anthropic API key.";
+  } else if (companionStatus.mode === "not_connected") {
+    state = "warning";
+    label = companionStatus.label || "Install Claude Desktop to get started.";
+    hint = NOT_CONNECTED_HINT;
+  }
+
+  banner.dataset.state = state;
+  text.textContent = label;
+  setSetupHint(hint);
+}
+
+function setSetupHint(text) {
+  const el = document.getElementById("setup-status-hint");
+  if (!el) return;
+  if (text) {
+    el.textContent = text;
+    el.classList.remove("hidden");
+  } else {
+    el.textContent = "";
+    el.classList.add("hidden");
   }
 }
 
@@ -267,32 +332,32 @@ async function sendMessage() {
     : null;
 
   try {
-    const res = await fetch(`${serverUrl}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: text,
-        page_context: pageContext,
-        history: messages.slice(-10),
-        current_step: stepContext,
-        guide_steps: guideSteps,
-        user_profile: userProfile,
-        user_questionnaire: userQuestionnaire,
-      })
+    const res = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({
+        type: "chat",
+        payload: {
+          message: text,
+          page_context: pageContext,
+          history: messages.slice(-10),
+          current_step: stepContext,
+          guide_steps: guideSteps,
+          user_profile: userProfile,
+          user_questionnaire: userQuestionnaire,
+        },
+      }, (response) => resolve(response));
     });
     thinkingEl.remove();
-    if (!res.ok) throw new Error(`Server error ${res.status}`);
-    const data = await res.json();
-    const reply = data.response || "(no response)";
+    if (!res || !res.ok) {
+      const errMsg = (res && res.error) || "Could not reach AI Office companion";
+      appendMessage("error", `Error: ${errMsg}. Is the companion running?`);
+      return;
+    }
+    const reply = res.response || "(no response)";
     appendMessage("assistant", reply);
     messages.push({ role: "assistant", content: reply });
   } catch (err) {
     thinkingEl.remove();
-    if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
-      appendMessage("error", "Could not reach AI Office server. Is it running?");
-    } else {
-      appendMessage("error", `Error: ${err.message}`);
-    }
+    appendMessage("error", `Error: ${err.message || err}`);
   } finally {
     sendBtn.disabled = false;
   }
@@ -419,6 +484,7 @@ function updateMcpDot(connected) {
   const dot = document.getElementById("mcp-dot");
   if (!dot) return;
   dot.className = "mcp-dot " + (connected ? "connected" : "disconnected");
+  dot.title = companionStatus.label || (connected ? "Connected" : "Companion not running");
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
