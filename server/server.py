@@ -1,177 +1,29 @@
 #!/usr/bin/env python3
 """
-AI Office — Local Companion Server
-Routes chat from the Chrome extension through `claude -p` with the user's full MCP stack.
+AI Office — HTTP companion server (legacy / fallback).
+
+The primary transport is now Native Messaging (see native_host.py). This HTTP
+server is kept around for development and as a fallback for environments where
+Native Messaging isn't registered.
 
 Endpoints:
-  GET  /status  ->  { connected: true, version: "..." }
-  POST /chat    ->  { message, page_context, history, current_step } -> { response }
+  GET  /status  ->  { connected, version, mode, label, ready }
+  POST /chat    ->  { message, page_context, history, current_step, ... }
+                ->  { response, mode }
 
 Run: python server/server.py
 Default port: 7848
 """
 
 import json
-import os
-import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from core import VERSION, detect_route, handle_chat  # noqa: E402
 
 PORT = 7848
-VERSION = "0.2.0"
-
-SYSTEM_PROMPT = """You are the AI Office assistant — a helpful guide embedded in the user's browser.
-Your job is to help them set up Claude Desktop and get real value from it.
-
-You will be given the user's profile, their full setup guide (all steps with completion status), their current active step, the page they are viewing, and conversation history.
-
-Key rules:
-- Always know what step the user is on. If they ask where they are or what to do next, answer from the guide — not from the page.
-- When the user navigates to a new page, connect it to their current step if relevant. Don't just describe what's on the page.
-- Be practical and beginner-friendly. Use numbered steps for instructions.
-- Keep responses concise — this is a browser sidepanel, not a long-form document."""
-
-
-def find_claude() -> str:
-    """Find the claude CLI binary, checking common Windows locations."""
-    candidates = [
-        "claude",
-        os.path.expandvars(r"%LOCALAPPDATA%\Programs\claude\claude.exe"),
-        os.path.expandvars(r"%LOCALAPPDATA%\AnthropicClaude\claude.exe"),
-        os.path.expanduser(r"~\AppData\Local\Programs\claude\claude.exe"),
-    ]
-    for c in candidates:
-        try:
-            result = subprocess.run([c, "--version"], capture_output=True, timeout=5)
-            if result.returncode == 0:
-                return c
-        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-            continue
-    return "claude"
-
-
-CLAUDE_BIN = find_claude()
-
-
-def build_prompt(
-    message: str,
-    history: list,
-    page_context: dict,
-    current_step: dict | None,
-    guide_steps: list,
-    user_profile: dict | None,
-    user_questionnaire: dict | None,
-) -> str:
-    parts = [SYSTEM_PROMPT]
-
-    if user_profile or user_questionnaire:
-        lines = ["\n\n[User profile]"]
-        if user_profile:
-            lines.append(f"  Name: {user_profile.get('name', 'Unknown')}")
-            lines.append(f"  OS: {user_profile.get('os', 'Unknown')}")
-        if user_questionnaire:
-            q = user_questionnaire
-            if q.get("use_case"):
-                lines.append(f"  Setting up for: {q['use_case']}")
-            if q.get("categories"):
-                lines.append(f"  Focus areas: {', '.join(q['categories'])}")
-            if q.get("google_gmail") or q.get("microsoft_outlook"):
-                email = []
-                if q.get("google_gmail"): email.append("Gmail")
-                if q.get("microsoft_outlook"): email.append("Outlook")
-                lines.append(f"  Email: {', '.join(email)}")
-            if q.get("google_calendar") or q.get("microsoft_calendar"):
-                cal = []
-                if q.get("google_calendar"): cal.append("Google Calendar")
-                if q.get("microsoft_calendar"): cal.append("Microsoft Calendar")
-                lines.append(f"  Calendar: {', '.join(cal)}")
-            if q.get("note_taking_tool"):
-                lines.append(f"  Notes: {q['note_taking_tool']}")
-            if q.get("messaging_app"):
-                lines.append(f"  Messaging: {q['messaging_app']}")
-            if q.get("finance_tools"):
-                lines.append(f"  Finance tools: {', '.join(q['finance_tools'])}")
-            if q.get("creative_tools"):
-                lines.append(f"  Creative tools: {', '.join(q['creative_tools'])}")
-            if q.get("github"): lines.append("  Uses: GitHub")
-            if q.get("goal"):
-                lines.append(f"  Goal: {q['goal']}")
-        parts.append("\n".join(lines))
-
-    if guide_steps:
-        completed = sum(1 for s in guide_steps if s.get("status") in ("complete", "skipped"))
-        total = len(guide_steps)
-        lines = [f"\n\n[User's setup guide — {completed}/{total} steps complete]"]
-        current_id = (current_step or {}).get("id")
-        for s in guide_steps:
-            if s.get("status") in ("complete", "skipped"):
-                marker = "✓"
-            elif s.get("id") == current_id:
-                marker = "→"
-            else:
-                marker = "○"
-            lines.append(f"  {marker} Step {s.get('step_number', '')}: {s.get('title', '')} [{s.get('section', '')}]")
-        parts.append("\n".join(lines))
-
-    if page_context and page_context.get("url"):
-        content = page_context.get("text", "")[:6000]
-        parts.append(
-            f"\n\n[Browser page]\n"
-            f"Title: {page_context.get('title', 'Unknown')}\n"
-            f"URL: {page_context.get('url', '')}\n"
-            f"Content:\n{content}"
-        )
-
-    if history:
-        parts.append("\n\n[Conversation so far]")
-        for turn in history[-8:]:
-            role = "User" if turn.get("role") == "user" else "Assistant"
-            parts.append(f"\n{role}: {turn.get('content', '')}")
-
-    # Active step comes last — right before the user's message — so it is
-    # the freshest context and overrides anything seen on the page.
-    if current_step:
-        parts.append(
-            f"\n\n[REMINDER — active setup step]\n"
-            f"The user is on Step {current_step.get('step_number', '')}: {current_step.get('title', '')}\n"
-            f"{current_step.get('description', '')}\n"
-            "Answer questions about what to do from this step. "
-            "Do not suggest tasks from the page that are not part of this step."
-        )
-
-    parts.append(f"\n\nUser: {message}\nAssistant:")
-    return "".join(parts)
-
-
-def run_claude(prompt: str) -> str:
-    try:
-        result = subprocess.run(
-            [CLAUDE_BIN, "-p", "--permission-mode", "bypassPermissions", prompt],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=120,
-        )
-        output = result.stdout.strip()
-        if not output and result.stderr.strip():
-            # Try without --permission-mode for older CLI versions
-            result2 = subprocess.run(
-                [CLAUDE_BIN, "-p", prompt],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            output = result2.stdout.strip() or result2.stderr.strip()
-        return output or "(no response)"
-    except subprocess.TimeoutExpired:
-        return "Request timed out. Try a shorter question."
-    except FileNotFoundError:
-        return (
-            f"Claude CLI not found at '{CLAUDE_BIN}'. "
-            "Make sure Claude Code is installed: https://claude.ai/download"
-        )
-    except Exception as e:
-        return f"Server error: {e}"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -196,7 +48,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/status":
-            self.send_json(200, {"connected": True, "version": VERSION})
+            route = detect_route()
+            self.send_json(200, {
+                "connected": True,
+                "version": VERSION,
+                "mode": route["mode"],
+                "label": route["label"],
+                "ready": route["ready"],
+            })
         else:
             self.send_json(404, {"error": "Not found"})
 
@@ -209,29 +68,21 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/chat":
-            message = body.get("message", "").strip()
-            if not message:
-                self.send_json(400, {"error": "message is required"})
-                return
-
-            prompt = build_prompt(
-                message=message,
-                history=body.get("history") or [],
-                page_context=body.get("page_context") or {},
-                current_step=body.get("current_step"),
-                guide_steps=body.get("guide_steps") or [],
-                user_profile=body.get("user_profile"),
-                user_questionnaire=body.get("user_questionnaire"),
-            )
-            response = run_claude(prompt)
-            self.send_json(200, {"response": response})
+            result = handle_chat(body)
+            if "error" in result and "response" not in result:
+                self.send_json(400, result)
+            else:
+                self.send_json(200, result)
         else:
             self.send_json(404, {"error": "Not found"})
 
 
 if __name__ == "__main__":
+    route = detect_route()
     print(f"AI Office server v{VERSION}")
-    print(f"Claude CLI: {CLAUDE_BIN}")
+    print(f"Route: {route['label']}")
+    if route.get("claude_path"):
+        print(f"Claude CLI: {route['claude_path']}")
     print(f"Listening on http://127.0.0.1:{PORT}")
     print("Press Ctrl+C to stop.\n")
     httpd = HTTPServer(("127.0.0.1", PORT), Handler)

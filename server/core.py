@@ -1,0 +1,224 @@
+"""
+AI Office — shared chat logic.
+
+Used by both the HTTP server (server.py) and the Native Messaging host
+(native_host.py). Knows how to detect which Claude route is available,
+build a prompt, and run it through the Claude CLI.
+"""
+
+import os
+import subprocess
+
+VERSION = "0.3.0"
+
+SYSTEM_PROMPT = """You are the AI Office assistant — a helpful guide embedded in the user's browser.
+Your job is to help them set up Claude Desktop and get real value from it.
+
+You will be given the user's profile, their full setup guide (all steps with completion status), their current active step, the page they are viewing, and conversation history.
+
+Key rules:
+- Always know what step the user is on. If they ask where they are or what to do next, answer from the guide — not from the page.
+- When the user navigates to a new page, connect it to their current step if relevant. Don't just describe what's on the page.
+- Be practical and beginner-friendly. Use numbered steps for instructions.
+- Keep responses concise — this is a browser sidepanel, not a long-form document."""
+
+
+def find_claude() -> str | None:
+    """Return a working path to the Claude Code CLI, or None if not found."""
+    candidates = [
+        "claude",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\claude\claude.exe"),
+        os.path.expandvars(r"%LOCALAPPDATA%\AnthropicClaude\claude.exe"),
+        os.path.expanduser(r"~\AppData\Local\Programs\claude\claude.exe"),
+        "/Applications/Claude.app/Contents/MacOS/claude",
+        os.path.expanduser("~/.local/bin/claude"),
+    ]
+    for c in candidates:
+        try:
+            result = subprocess.run([c, "--version"], capture_output=True, timeout=5)
+            if result.returncode == 0:
+                return c
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            continue
+    return None
+
+
+def detect_route() -> dict:
+    """Decide how to reach Claude and return a status dict.
+
+    Shape: { mode, label, ready, claude_path?, version }
+      mode = "claude_desktop" | "anthropic_api" | "not_connected"
+      label = plain-English description shown to the user
+      ready = whether chat will actually work
+    """
+    claude_path = find_claude()
+    if claude_path:
+        return {
+            "mode": "claude_desktop",
+            "label": "Connected through Claude Desktop",
+            "ready": True,
+            "claude_path": claude_path,
+            "version": VERSION,
+        }
+
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return {
+            "mode": "anthropic_api",
+            "label": "Using your Anthropic API key",
+            "ready": False,
+            "version": VERSION,
+        }
+
+    return {
+        "mode": "not_connected",
+        "label": "Install Claude Desktop to get started",
+        "ready": False,
+        "version": VERSION,
+    }
+
+
+def build_prompt(
+    message: str,
+    history: list,
+    page_context: dict,
+    current_step: dict | None,
+    guide_steps: list,
+    user_profile: dict | None,
+    user_questionnaire: dict | None,
+) -> str:
+    parts = [SYSTEM_PROMPT]
+
+    if user_profile or user_questionnaire:
+        lines = ["\n\n[User profile]"]
+        if user_profile:
+            lines.append(f"  Name: {user_profile.get('name', 'Unknown')}")
+            lines.append(f"  OS: {user_profile.get('os', 'Unknown')}")
+        if user_questionnaire:
+            q = user_questionnaire
+            if q.get("use_case"):
+                lines.append(f"  Setting up for: {q['use_case']}")
+            if q.get("categories"):
+                lines.append(f"  Focus areas: {', '.join(q['categories'])}")
+            if q.get("google_gmail") or q.get("microsoft_outlook"):
+                email = []
+                if q.get("google_gmail"): email.append("Gmail")
+                if q.get("microsoft_outlook"): email.append("Outlook")
+                lines.append(f"  Email: {', '.join(email)}")
+            if q.get("google_calendar") or q.get("microsoft_calendar"):
+                cal = []
+                if q.get("google_calendar"): cal.append("Google Calendar")
+                if q.get("microsoft_calendar"): cal.append("Microsoft Calendar")
+                lines.append(f"  Calendar: {', '.join(cal)}")
+            if q.get("note_taking_tool"):
+                lines.append(f"  Notes: {q['note_taking_tool']}")
+            if q.get("messaging_app"):
+                lines.append(f"  Messaging: {q['messaging_app']}")
+            if q.get("finance_tools"):
+                lines.append(f"  Finance tools: {', '.join(q['finance_tools'])}")
+            if q.get("creative_tools"):
+                lines.append(f"  Creative tools: {', '.join(q['creative_tools'])}")
+            if q.get("github"): lines.append("  Uses: GitHub")
+            if q.get("goal"):
+                lines.append(f"  Goal: {q['goal']}")
+        parts.append("\n".join(lines))
+
+    if guide_steps:
+        completed = sum(1 for s in guide_steps if s.get("status") in ("complete", "skipped"))
+        total = len(guide_steps)
+        lines = [f"\n\n[User's setup guide — {completed}/{total} steps complete]"]
+        current_id = (current_step or {}).get("id")
+        for s in guide_steps:
+            if s.get("status") in ("complete", "skipped"):
+                marker = "✓"
+            elif s.get("id") == current_id:
+                marker = "→"
+            else:
+                marker = "○"
+            lines.append(f"  {marker} Step {s.get('step_number', '')}: {s.get('title', '')} [{s.get('section', '')}]")
+        parts.append("\n".join(lines))
+
+    if page_context and page_context.get("url"):
+        content = page_context.get("text", "")[:6000]
+        parts.append(
+            f"\n\n[Browser page]\n"
+            f"Title: {page_context.get('title', 'Unknown')}\n"
+            f"URL: {page_context.get('url', '')}\n"
+            f"Content:\n{content}"
+        )
+
+    if history:
+        parts.append("\n\n[Conversation so far]")
+        for turn in history[-8:]:
+            role = "User" if turn.get("role") == "user" else "Assistant"
+            parts.append(f"\n{role}: {turn.get('content', '')}")
+
+    if current_step:
+        parts.append(
+            f"\n\n[REMINDER — active setup step]\n"
+            f"The user is on Step {current_step.get('step_number', '')}: {current_step.get('title', '')}\n"
+            f"{current_step.get('description', '')}\n"
+            "Answer questions about what to do from this step. "
+            "Do not suggest tasks from the page that are not part of this step."
+        )
+
+    parts.append(f"\n\nUser: {message}\nAssistant:")
+    return "".join(parts)
+
+
+def run_claude(prompt: str, claude_bin: str) -> str:
+    try:
+        result = subprocess.run(
+            [claude_bin, "-p", "--permission-mode", "bypassPermissions", prompt],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=120,
+        )
+        output = result.stdout.strip()
+        if not output and result.stderr.strip():
+            result2 = subprocess.run(
+                [claude_bin, "-p", prompt],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            output = result2.stdout.strip() or result2.stderr.strip()
+        return output or "(no response)"
+    except subprocess.TimeoutExpired:
+        return "Request timed out. Try a shorter question."
+    except FileNotFoundError:
+        return (
+            f"Claude CLI not found at '{claude_bin}'. "
+            "Make sure Claude Code is installed: https://claude.ai/download"
+        )
+    except Exception as e:
+        return f"Server error: {e}"
+
+
+def handle_chat(payload: dict) -> dict:
+    """Single dispatch point for a chat request. Returns a response dict."""
+    message = (payload.get("message") or "").strip()
+    if not message:
+        return {"error": "message is required"}
+
+    route = detect_route()
+    if not route["ready"]:
+        return {
+            "response": (
+                f"{route['label']}. Install Claude Code to enable chat: "
+                "https://claude.ai/download"
+            ),
+            "mode": route["mode"],
+        }
+
+    prompt = build_prompt(
+        message=message,
+        history=payload.get("history") or [],
+        page_context=payload.get("page_context") or {},
+        current_step=payload.get("current_step"),
+        guide_steps=payload.get("guide_steps") or [],
+        user_profile=payload.get("user_profile"),
+        user_questionnaire=payload.get("user_questionnaire"),
+    )
+    response = run_claude(prompt, route["claude_path"])
+    return {"response": response, "mode": route["mode"]}
