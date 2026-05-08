@@ -186,6 +186,7 @@ async function connect() {
     account_token: accountToken,
     configured: true,
   });
+  chrome.runtime.sendMessage({ type: "set_web_config", webAppUrl, accountToken }).catch(() => {});
   showChatScreen();
   await loadPageContext();
   await loadCurrentStep();
@@ -247,148 +248,266 @@ function showChatScreen() {
 
 // ── Page Context ──────────────────────────────────────────────────────────────
 function setFavicon(url) {
-  const el = document.getElementById("page-favicon");
-  if (!el) return;
-  if (url) { el.src = url; el.style.display = "block"; }
-  else { el.src = ""; el.style.display = "none"; }
+  const img = document.getElementById("page-favicon");
+  if (!img) return;
+  if (!url) { img.src = ""; img.classList.add("hidden"); return; }
+  img.src = url;
+  img.classList.remove("hidden");
+  img.onerror = () => img.classList.add("hidden");
 }
 
 async function loadPageContext() {
-  const titleEl = document.getElementById("page-title");
-  titleEl.textContent = "Reading page...";
-  setFavicon(null);
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) { titleEl.textContent = "No active tab"; return; }
-    setFavicon(tab.favIconUrl || null);
+    if (!tab) return;
+    const titleEl = document.getElementById("page-title");
+    if (titleEl) titleEl.textContent = tab.title || tab.url || "Unknown";
+    const faviconUrl = tab.favIconUrl || null;
+    setFavicon(faviconUrl);
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => {
-        const url = location.href;
-        const clone = document.body.cloneNode(true);
-        clone.querySelectorAll("script,style,nav,footer,aside").forEach(el => el.remove());
-        const text = (clone.innerText || "").replace(/\s{3,}/g, "\n\n").trim();
-        return { title: document.title, url, text };
-      }
+      func: () => ({ url: location.href, title: document.title, text: document.body?.innerText?.slice(0, 40000) || "" }),
     });
-    const data = results[0]?.result;
-    if (!data) { titleEl.textContent = "Could not read page"; return; }
-    pageContext = { title: data.title, url: data.url, text: data.text.slice(0, MAX_PAGE_CHARS) };
-    titleEl.textContent = data.title || data.url;
-    titleEl.title = data.url;
-  } catch (err) {
-    titleEl.textContent = "Error reading page";
+    if (results?.[0]?.result) {
+      pageContext = results[0].result;
+      if (titleEl) titleEl.textContent = pageContext.title || tab.url;
+    } else {
+      pageContext = { url: tab.url, title: tab.title || tab.url, text: "" };
+    }
+  } catch {
+    pageContext = null;
   }
 }
 
-// ── Setup Step Context ────────────────────────────────────────────────────────
+// ── Step Guidance ─────────────────────────────────────────────────────────────
 async function loadCurrentStep() {
-  if (!accountToken) return;
+  if (!accountToken || !webAppUrl) return;
   try {
-    const res = await fetch(`${webAppUrl}/api/extension/status?token=${accountToken}`, {
-      signal: AbortSignal.timeout(5000)
-    });
+    const res = await fetch(`${webAppUrl}/api/extension/status?token=${encodeURIComponent(accountToken)}`);
     if (!res.ok) return;
     const data = await res.json();
-    currentStep = data.current_step ?? null;
-    guideSteps = data.all_steps ?? [];
-    userProfile = data.profile ?? null;
-    userQuestionnaire = data.questionnaire ?? null;
-    renderCurrentStep();
-  } catch { /* non-fatal */ }
+    if (!data.connected) return;
+    currentStep = data.current_step || null;
+    guideSteps = data.all_steps || [];
+    userProfile = data.profile || null;
+    userQuestionnaire = data.questionnaire || null;
+    renderStep();
+  } catch {
+    // silently fail — step guidance is best-effort
+  }
 }
 
-function renderCurrentStep() {
+const MARK_COMPLETE_PATTERN = /\b(done|complete|completed|finished|mark.*(complete|done)|next step)\b/i;
+
+async function handleMarkComplete() {
+  if (!currentStep || !accountToken || !webAppUrl) return;
+  try {
+    await fetch(`${webAppUrl}/api/steps/${currentStep.id}?token=${encodeURIComponent(accountToken)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "complete" }),
+    });
+    await loadCurrentStep();
+  } catch {}
+}
+
+// ── Step pill + detail panel ──────────────────────────────────────────────────
+let stepDetailOpen = false;
+
+function renderStep() {
+  const pill = document.getElementById("step-pill");
   const bar = document.getElementById("step-bar");
-  const titleEl = document.getElementById("step-bar-title");
-  const detail = document.getElementById("step-detail");
-  const detailBody = document.getElementById("step-detail-body");
-  if (!bar || !titleEl) return;
+  const title = document.getElementById("step-title");
+  const completeBtn = document.getElementById("step-complete-btn");
+
   if (!currentStep) {
-    bar.classList.add("hidden");
-    if (detail) detail.classList.remove("open");
+    if (bar) bar.classList.add("hidden");
     return;
   }
-  const num = currentStep.step_number ? `${currentStep.step_number}. ` : "";
-  titleEl.textContent = `${num}${currentStep.title}`;
-  titleEl.title = currentStep.title;
-  if (detailBody) {
-    detailBody.innerHTML = renderStepDetail(currentStep);
-  }
-  bar.classList.remove("hidden");
-}
 
-function renderStepDetail(step) {
-  const parts = [];
-  if (step.why) {
-    parts.push(`<p class="step-detail-why">${escapeHtml(step.why)}</p>`);
+  if (bar) bar.classList.remove("hidden");
+  if (title) title.textContent = `Step ${currentStep.step_number}: ${currentStep.title}`;
+  if (pill) {
+    pill.textContent = `${currentStep.step_number}`;
+    pill.title = currentStep.title;
   }
-  if (step.click_steps?.length) {
-    parts.push(`<ol>${step.click_steps.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ol>`);
+  if (completeBtn) {
+    completeBtn.title = "Mark step complete";
   }
-  if (step.code_blocks?.length) {
-    parts.push(step.code_blocks.map(b =>
-      `<pre class="step-detail-code"><code>${escapeHtml(b.content || b)}</code></pre>`
-    ).join(""));
-  }
-  if (step.notes?.length) {
-    parts.push(step.notes.map(n => `<p class="step-detail-note">💡 ${escapeHtml(n)}</p>`).join(""));
-  }
-  if (step.links?.length) {
-    const linkHtml = step.links.map(l => {
-      const safe = l.url.replace(/"/g, "&quot;");
-      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)}</a>`;
-    }).join(" · ");
-    parts.push(`<p class="step-detail-links">${linkHtml}</p>`);
-  }
-  return parts.length ? parts.join("") : `<p>${escapeHtml(step.description || step.title)}</p>`;
-}
 
-function escapeHtml(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  if (stepDetailOpen) renderStepDetail();
 }
 
 function toggleStepDetail() {
-  const detail = document.getElementById("step-detail");
+  stepDetailOpen = !stepDetailOpen;
   const btn = document.getElementById("step-expand-btn");
-  if (!detail || !btn) return;
-  const isOpen = detail.classList.toggle("open");
-  btn.classList.toggle("open", isOpen);
+  const detail = document.getElementById("step-detail");
+  if (btn) btn.dataset.open = stepDetailOpen ? "true" : "false";
+  if (detail) {
+    if (stepDetailOpen) {
+      detail.classList.remove("hidden");
+      renderStepDetail();
+    } else {
+      detail.classList.add("hidden");
+    }
+  }
 }
 
-async function markStepComplete(stepId) {
-  if (!accountToken) throw new Error("No account token configured");
-  const res = await fetch(`${webAppUrl}/api/steps/${stepId}?token=${accountToken}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "complete" })
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderStepDetail() {
+  const detail = document.getElementById("step-detail");
+  if (!detail || !currentStep) return;
+
+  const parts = [];
+
+  if (currentStep.why) {
+    parts.push(`<p class="step-detail-why">${escapeHtml(currentStep.why)}</p>`);
+  }
+
+  if (currentStep.click_steps?.length) {
+    parts.push(
+      `<ol class="step-detail-list">${currentStep.click_steps.map(s =>
+        `<li>${escapeHtml(s)}</li>`
+      ).join("")}</ol>`
+    );
+  }
+
+  if (currentStep.code_blocks?.length) {
+    parts.push(currentStep.code_blocks.map(b =>
+      `<pre class="step-detail-code"><code>${escapeHtml(b.content || b)}</code></pre>`
+    ).join(""));
+  }
+
+  if (currentStep.notes?.length) {
+    parts.push(
+      `<ul class="step-detail-notes">${currentStep.notes.map(n =>
+        `<li>${escapeHtml(n)}</li>`
+      ).join("")}</ul>`
+    );
+  }
+
+  if (currentStep.links?.length) {
+    parts.push(
+      `<div class="step-detail-links">${currentStep.links.map(l =>
+        `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)}</a>`
+      ).join("")}</div>`
+    );
+  }
+
+  detail.innerHTML = parts.join("") || "<p>No additional details.</p>";
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+let customActions = [];
+
+async function initActions() {
+  const stored = await chrome.storage.local.get("custom_actions");
+  customActions = stored.custom_actions || [];
+  renderActions();
+}
+
+function renderActions() {
+  const container = document.getElementById("quick-actions");
+  if (!container) return;
+  const all = [...DEFAULT_ACTIONS, ...customActions];
+  container.innerHTML = all.map((a, i) =>
+    `<button class="action-btn" data-index="${i}" title="${escapeHtml(a.label)}">${a.icon || "⚡"}</button>`
+  ).join("");
+  container.querySelectorAll(".action-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = all[parseInt(btn.dataset.index)];
+      if (action) triggerAction(action.prompt);
+    });
   });
-  if (!res.ok) throw new Error(`Server returned ${res.status}`);
-  currentStep = null;
-  renderCurrentStep();
-  await loadCurrentStep();
 }
 
-// ── Step completion ──────────────────────────────────────────────────────────
-const MARK_COMPLETE_PATTERN = /\b(mark|set|check off|finish)\s+(this\s+)?(step\s+)?(as\s+)?(complete|completed|done|finished)\b/i;
+function triggerAction(prompt) {
+  const input = document.getElementById("user-input");
+  if (!input) return;
+  input.value = prompt;
+  sendMessage();
+}
 
-async function handleMarkComplete() {
-  if (!currentStep) {
-    appendMessage("assistant", "No active step to mark complete.");
-    return;
+function toggleEditor() {
+  const editor = document.getElementById("action-editor");
+  if (!editor) return;
+  editor.classList.toggle("hidden");
+  if (!editor.classList.contains("hidden")) {
+    document.getElementById("action-label-input").value = "";
+    document.getElementById("action-icon-input").value = "";
+    document.getElementById("action-prompt-input").value = "";
   }
-  const completedTitle = currentStep.title;
-  const stepId = currentStep.id;
-  appendMessage("assistant", `Marking "${completedTitle}" complete…`);
-  try {
-    await markStepComplete(stepId);
-    const next = currentStep ? `Now on Step ${currentStep.step_number}: ${currentStep.title}.` : "All steps complete.";
-    appendMessage("assistant", `✓ Marked "${completedTitle}" complete. ${next}`);
-  } catch (err) {
-    appendMessage("error", `Could not mark step complete: ${err.message}`);
+}
+
+async function saveNewAction() {
+  const label = document.getElementById("action-label-input").value.trim();
+  const icon = document.getElementById("action-icon-input").value.trim() || "⚡";
+  const prompt = document.getElementById("action-prompt-input").value.trim();
+  if (!label || !prompt) return;
+  customActions.push({ label, icon, prompt });
+  await chrome.storage.local.set({ custom_actions: customActions });
+  renderActions();
+  toggleEditor();
+}
+
+// ── MCP Status Dot ────────────────────────────────────────────────────────────
+function updateMcpDot(connected) {
+  const dot = document.getElementById("mcp-status-dot");
+  if (!dot) return;
+  dot.dataset.connected = connected ? "true" : "false";
+  dot.title = connected
+    ? "Connected to Claude Desktop"
+    : "Not connected to Claude Desktop";
+}
+
+// ── Clear chat ────────────────────────────────────────────────────────────────
+function clearChat() {
+  messages = [];
+  const container = document.getElementById("messages");
+  if (container) container.innerHTML = "";
+}
+
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+function renderMarkdown(text) {
+  let html = escapeHtml(text);
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // Numbered list
+  html = html.replace(/(?:^|\n)(\d+)\.\s+(.+)/g, (_, n, item) => `\n<li value="${n}">${item}</li>`);
+  html = html.replace(/(<li[^>]*>.*<\/li>)/s, "<ol>$1</ol>");
+  // Bullet list
+  html = html.replace(/(?:^|\n)[-*]\s+(.+)/g, (_, item) => `\n<li>${item}</li>`);
+  html = html.replace(/(?<!\<ol\>)(<li>.*<\/li>)(?!\<\/ol\>)/s, "<ul>$1</ul>");
+  // Paragraphs
+  html = html.replace(/\n\n+/g, "</p><p>");
+  html = html.replace(/\n/g, "<br>");
+  return `<p>${html}</p>`;
+}
+
+// ── Message rendering ─────────────────────────────────────────────────────────
+function appendMessage(role, text) {
+  const container = document.getElementById("messages");
+  const div = document.createElement("div");
+  div.className = `message ${role}`;
+  if (role === "thinking") {
+    div.textContent = text;
+  } else if (role === "assistant") {
+    div.innerHTML = renderMarkdown(text);
+  } else {
+    div.textContent = text;
   }
+  container.appendChild(div);
+  div.scrollIntoView({ behavior: "smooth", block: "end" });
+  return div;
 }
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
@@ -515,260 +634,31 @@ async function sendMessage() {
 function appendThinkingProgress(onCancel) {
   const container = document.createElement("div");
   container.className = "message thinking";
-  // No IDs — this can render multiple times per session, and we wire the
-  // cancel listener directly to the button created here so subsequent
-  // turns don't bind to a stale element from an earlier turn.
-  container.innerHTML = `
-    <span class="thinking-label">Thinking…</span>
-    <span class="thinking-elapsed"></span>
-    <button class="thinking-cancel hidden" title="Cancel">Cancel</button>
-  `;
-  document.getElementById("messages").appendChild(container);
+
+  const label = document.createElement("span");
+  label.textContent = "Thinking…";
+  container.appendChild(label);
+
+  let cancelBtn = null;
+  function showCancel() {
+    if (cancelBtn) return;
+    cancelBtn = document.createElement("button");
+    cancelBtn.className = "cancel-btn";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => {
+      cancelBtn.disabled = true;
+      onCancel();
+    });
+    container.appendChild(cancelBtn);
+  }
+
+  function setElapsed(secs) {
+    label.textContent = `Thinking… ${secs}s`;
+  }
+
+  const messagesEl = document.getElementById("messages");
+  messagesEl.appendChild(container);
   container.scrollIntoView({ behavior: "smooth", block: "end" });
-  const elapsedEl = container.querySelector(".thinking-elapsed");
-  const cancelBtn = container.querySelector(".thinking-cancel");
-  cancelBtn.addEventListener("click", () => {
-    cancelBtn.disabled = true;
-    cancelBtn.textContent = "Cancelling…";
-    if (onCancel) onCancel();
-  });
-  return {
-    container,
-    setElapsed: (s) => { elapsedEl.textContent = s >= 1 ? `${s}s` : ""; },
-    showCancel: () => cancelBtn.classList.remove("hidden"),
-  };
-}
 
-async function sendWithPrompt(prompt) {
-  document.getElementById("user-input").value = prompt;
-  await sendMessage();
-}
-
-function renderMarkdown(text) {
-  // 1. Extract code blocks and URLs before HTML escaping so we can handle them cleanly
-  const protected_ = [];
-  let s = text;
-
-  s = s.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) => {
-    protected_.push({ type: 'code', content: code });
-    return `\x00P${protected_.length - 1}\x00`;
-  });
-
-  // Markdown links [text](url) — process before bare URL detection
-  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, label, url) => {
-    const safeHref = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-    const safeLabel = label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    protected_.push({ type: 'url', content: `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>` });
-    return `\x00P${protected_.length - 1}\x00`;
-  });
-
-  // Full URLs with protocol
-  s = s.replace(/https?:\/\/[^\s<>")\]]+/g, url => {
-    const cleanUrl = url.replace(/[.,;:!?)\]]+$/, "");
-    const trail = url.slice(cleanUrl.length);
-    const safeHref = cleanUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-    protected_.push({ type: 'url', content: `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${cleanUrl.replace(/&/g, '&amp;')}</a>${trail}` });
-    return `\x00P${protected_.length - 1}\x00`;
-  });
-
-  // Bare domains like nodejs.org, claude.ai, console.anthropic.com
-  // Match: word chars/hyphens, dots, common TLDs, optional /path
-  s = s.replace(/\b([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^\s<>")\]]*)?/gi, (match, domain, path) => {
-    if (!/\.(com|org|net|io|ai|app|dev|co|gov|edu|us|uk|ca|me|tv|info|tools|cloud|so|sh|page|tech|company|run)(\b|$)/i.test(domain)) return match;
-    const url = (path ? domain + path : domain).replace(/[.,;:!?)\]]+$/, "");
-    const trail = (path ? domain + path : domain).slice(url.length);
-    const safeHref = "https://" + url.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-    protected_.push({ type: 'url', content: `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${url.replace(/&/g, '&amp;')}</a>${trail}` });
-    return `\x00P${protected_.length - 1}\x00`;
-  });
-
-  // 2. HTML escape
-  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-  // 3. Inline formatting
-  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-
-  // 4. Lists — process line by line; blank lines between consecutive list items are skipped
-  const lines = s.split('\n');
-  const out = [];
-  let inUl = false, inOl = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const ulM = line.match(/^- (.+)/);
-    const olM = line.match(/^\d+\. (.+)/);
-
-    if (ulM) {
-      if (!inUl) { if (inOl) { out.push('</ol>'); inOl = false; } out.push('<ul>'); inUl = true; }
-      out.push(`<li>${ulM[1]}</li>`);
-    } else if (olM) {
-      if (!inOl) { if (inUl) { out.push('</ul>'); inUl = false; } out.push('<ol>'); inOl = true; }
-      out.push(`<li>${olM[1]}</li>`);
-    } else if (line.trim() === '' && (inUl || inOl)) {
-      // Blank line inside a list — peek ahead; if next non-empty line continues the same list, skip the blank
-      const next = lines.slice(i + 1).find(l => l.trim() !== '');
-      const continues = next && ((inUl && /^- /.test(next)) || (inOl && /^\d+\. /.test(next)));
-      if (!continues) {
-        if (inUl) { out.push('</ul>'); inUl = false; }
-        if (inOl) { out.push('</ol>'); inOl = false; }
-        out.push(line);
-      }
-      // else: skip the blank line so the list stays together
-    } else {
-      if (inUl) { out.push('</ul>'); inUl = false; }
-      if (inOl) { out.push('</ol>'); inOl = false; }
-      out.push(line);
-    }
-  }
-  if (inUl) out.push('</ul>');
-  if (inOl) out.push('</ol>');
-
-  // 5. Restore protected content
-  let result = out.join('\n');
-  result = result.replace(/\x00P(\d+)\x00/g, (_, i) => {
-    const item = protected_[parseInt(i)];
-    return item.type === 'code' ? `<pre><code>${item.content}</code></pre>` : item.content;
-  });
-
-  // 6. Paragraph and line breaks
-  result = result.replace(/\n\n+/g, '</p><p>');
-  result = result.replace(/\n/g, '<br>');
-  return result;
-}
-
-function appendMessage(role, text) {
-  const el = document.createElement("div");
-  el.className = `message ${role}`;
-  if (role === "assistant") {
-    el.innerHTML = renderMarkdown(text);
-  } else {
-    el.textContent = text;
-  }
-  document.getElementById("messages").appendChild(el);
-  el.scrollIntoView({ behavior: "smooth", block: "end" });
-  return el;
-}
-
-function clearChat() {
-  messages = [];
-  document.getElementById("messages").innerHTML = "";
-}
-
-function updateMcpDot(connected) {
-  const dot = document.getElementById("mcp-dot");
-  if (!dot) return;
-  dot.className = "mcp-dot " + (connected ? "connected" : "disconnected");
-  dot.title = companionStatus.label || (connected ? "Connected" : "Companion not running");
-}
-
-// ── Actions ───────────────────────────────────────────────────────────────────
-async function initActions() {
-  const stored = await chrome.storage.local.get("all_actions");
-  if (!stored.all_actions) {
-    await chrome.storage.local.set({ all_actions: DEFAULT_ACTIONS });
-  }
-  renderActions(await getActions());
-}
-
-async function getActions() {
-  const stored = await chrome.storage.local.get("all_actions");
-  return stored.all_actions || DEFAULT_ACTIONS;
-}
-
-async function saveActions(actions) {
-  await chrome.storage.local.set({ all_actions: actions });
-}
-
-function renderActions(actions) {
-  const container = document.getElementById("action-btns");
-  container.innerHTML = "";
-  actions.forEach((action) => {
-    const btn = document.createElement("button");
-    btn.className = "quick-btn";
-    btn.textContent = action.icon || "🔹";
-    btn.title = action.label;
-    btn.addEventListener("click", () => sendWithPrompt(action.prompt));
-    container.appendChild(btn);
-  });
-  renderEditorList(actions);
-}
-
-function renderEditorList(actions) {
-  const list = document.getElementById("actions-list");
-  if (!list) return;
-  list.innerHTML = "";
-  if (actions.length === 0) { list.innerHTML = "<div class='no-actions'>No actions yet.</div>"; return; }
-  actions.forEach((action, idx) => {
-    const row = document.createElement("div");
-    row.className = "action-row";
-    row.innerHTML = `
-      <div class="action-row-view">
-        <span class="action-icon">${action.icon || "🔹"}</span>
-        <span class="action-label">${action.label}</span>
-        <span class="action-prompt-preview">${action.prompt}</span>
-        <div class="action-row-btns">
-          <button class="row-btn edit-btn" title="Edit">✎</button>
-          <button class="row-btn remove-btn" title="Delete">✕</button>
-        </div>
-      </div>
-      <div class="action-row-edit hidden">
-        <div class="edit-icon-label-row">
-          <input class="edit-icon-input" type="text" value="${action.icon || "🔹"}" maxlength="8" readonly>
-          <input class="edit-label-input" type="text" value="${action.label}" maxlength="24">
-        </div>
-        <textarea class="edit-prompt-input" rows="3">${action.prompt}</textarea>
-        <div class="edit-row-actions">
-          <button class="row-btn save-edit-btn">Save</button>
-          <button class="row-btn cancel-edit-btn">Cancel</button>
-        </div>
-      </div>`;
-    row.querySelector(".edit-btn").addEventListener("click", () => toggleRowEdit(row, true));
-    row.querySelector(".cancel-edit-btn").addEventListener("click", () => toggleRowEdit(row, false));
-    row.querySelector(".remove-btn").addEventListener("click", () => deleteAction(idx));
-    row.querySelector(".save-edit-btn").addEventListener("click", () => saveEditAction(row, idx));
-    list.appendChild(row);
-  });
-}
-
-function toggleRowEdit(row, editing) {
-  row.querySelector(".action-row-view").classList.toggle("hidden", editing);
-  row.querySelector(".action-row-edit").classList.toggle("hidden", !editing);
-}
-
-async function saveEditAction(row, idx) {
-  const label = row.querySelector(".edit-label-input").value.trim();
-  const icon  = row.querySelector(".edit-icon-input").value.trim() || "🔹";
-  const prompt = row.querySelector(".edit-prompt-input").value.trim();
-  if (!label || !prompt) return;
-  const actions = await getActions();
-  actions[idx] = { ...actions[idx], label, icon, prompt };
-  await saveActions(actions);
-  renderActions(actions);
-}
-
-async function deleteAction(idx) {
-  const actions = await getActions();
-  actions.splice(idx, 1);
-  await saveActions(actions);
-  renderActions(actions);
-}
-
-async function saveNewAction() {
-  const label  = document.getElementById("new-action-label").value.trim();
-  const icon   = document.getElementById("new-action-icon").value.trim() || "🔹";
-  const prompt = document.getElementById("new-action-prompt").value.trim();
-  if (!label || !prompt) return;
-  const actions = await getActions();
-  actions.push({ label, icon, prompt });
-  await saveActions(actions);
-  document.getElementById("new-action-label").value = "";
-  document.getElementById("new-action-icon").value = "";
-  document.getElementById("new-action-prompt").value = "";
-  renderActions(actions);
-}
-
-function toggleEditor() {
-  document.getElementById("actions-editor").classList.toggle("hidden");
+  return { container, setElapsed, showCancel };
 }
