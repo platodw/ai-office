@@ -18,8 +18,9 @@ from typing import Callable, Optional
 
 VERSION = "0.5.0"
 
-# Model used for all AI Office chat responses.
-CHAT_MODEL = "claude-sonnet-4-6"
+# Model used for all AI Office chat responses. Haiku is fast enough for
+# step-by-step setup guidance and dramatically reduces latency.
+CHAT_MODEL = "claude-haiku-4-5-20251001"
 
 # Cached path to an empty MCP config file. We pass this to `claude -p` along
 # with --strict-mcp-config so the user's MCP servers don't get spun up — they
@@ -364,7 +365,11 @@ def stream_anthropic(
     on_chunk: Callable[[str], None],
     is_cancelled: Optional[Callable[[], bool]] = None,
 ) -> str:
-    """Stream a response via the Anthropic API. Fast path when API key is set."""
+    """Stream a response via the Anthropic API. Fast path when API key is set.
+
+    Splits the build_prompt output back into system + user content so the API
+    gets proper message structure instead of one big concatenated string.
+    """
     try:
         import anthropic as _anthropic
     except ImportError:
@@ -374,6 +379,8 @@ def stream_anthropic(
 
     client = _anthropic.Anthropic()
 
+    # build_prompt() starts with SYSTEM_PROMPT then appends context blocks.
+    # Everything after it becomes the user turn.
     if prompt.startswith(SYSTEM_PROMPT):
         system = SYSTEM_PROMPT
         user_content = prompt[len(SYSTEM_PROMPT):].strip()
