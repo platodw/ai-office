@@ -63,7 +63,7 @@ export default function SuggestionList({ initial }: { initial: Suggestion[] }) {
       }
       setSuggestions(s =>
         s.map(x => x.id === id
-          ? { ...x, status: (data.merged ? "merged" : "approved") as const, pr_url: data.pr_url, pr_number: data.pr_number }
+          ? { ...x, status: (data.merged ? "merged" : "approved") as Suggestion["status"], pr_url: data.pr_url, pr_number: data.pr_number }
           : x,
         ),
       );
