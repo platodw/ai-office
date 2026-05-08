@@ -18,9 +18,8 @@ from typing import Callable, Optional
 
 VERSION = "0.5.0"
 
-# Model used for all AI Office chat responses. Haiku is fast enough for
-# step-by-step setup guidance and dramatically reduces latency.
-CHAT_MODEL = "claude-haiku-4-5-20251001"
+# Model used for all AI Office chat responses.
+CHAT_MODEL = "claude-sonnet-4-6"
 
 # Cached path to an empty MCP config file. We pass this to `claude -p` along
 # with --strict-mcp-config so the user's MCP servers don't get spun up — they
@@ -152,10 +151,6 @@ def build_prompt(
                 lines.append(f"  Goal: {q['goal']}")
         parts.append("\n".join(lines))
 
-    # One-line progress summary instead of listing every step. The active
-    # step is reinjected at the bottom of the prompt with full detail; here
-    # we only need enough orientation for "where am I" / "what's next" type
-    # questions. Was ~1500 tokens for a 20-step guide, now ~50.
     if guide_steps:
         completed = sum(1 for s in guide_steps if s.get("status") in ("complete", "skipped"))
         total = len(guide_steps)
@@ -183,8 +178,6 @@ def build_prompt(
         parts.append(f"\n\n[Setup progress] {'. '.join(bits)}.")
 
     if page_context and page_context.get("url"):
-        # Cap at 2000 chars (was 6000). Setup-guide answers rarely need the
-        # whole page — title + URL + a brief excerpt is enough orientation.
         content = page_context.get("text", "")[:2000]
         parts.append(
             f"\n\n[Browser page]\n"
@@ -268,21 +261,10 @@ def stream_claude(
     timeout: int = DEFAULT_TIMEOUT_SEC,
     is_cancelled: Optional[Callable[[], bool]] = None,
 ) -> str:
-    """Run `claude -p` and stream text deltas to on_chunk as they arrive.
-
-    Uses --output-format=stream-json so we get token-by-token deltas instead
-    of one big buffered response at the end. Skips the user's MCP servers via
-    --strict-mcp-config + an empty --mcp-config so we don't pay 10-30s of
-    init cost on every turn.
-
-    Reader thread reads stdout line by line; each line is a JSON event. We
-    pull the text out of `content_block_delta` events and forward them.
-    """
+    """Run `claude -p` and stream text deltas to on_chunk as they arrive."""
     mcp_config = _ensure_empty_mcp_config()
     args = [
         claude_bin,
-        # MCP arg is multi-value, so put it BEFORE -p so the prompt isn't
-        # consumed as another config path.
         "--mcp-config", str(mcp_config),
         "--strict-mcp-config",
         "--model", CHAT_MODEL,
@@ -322,7 +304,6 @@ def stream_claude(
     err_done = False
 
     def handle_event(line: str) -> bool:
-        """Extract text from a stream-json line. Returns True if we should stop."""
         line = line.strip()
         if not line:
             return False
@@ -343,7 +324,6 @@ def stream_claude(
             elif inner == "message_stop":
                 return True
         elif evt_type == "result":
-            # Final result event — claude -p signals completion.
             return True
         return False
 
@@ -362,12 +342,11 @@ def stream_claude(
                 continue
             if kind == "out" and val:
                 if handle_event(val):
-                    # We've seen the stop event; drain quickly and exit.
                     out_done = True
             elif kind == "out_eof":
                 out_done = True
             elif kind == "err_out":
-                pass  # captured but not surfaced
+                pass
             elif kind == "err_out_eof":
                 err_done = True
             elif kind == "err":
@@ -385,11 +364,7 @@ def stream_anthropic(
     on_chunk: Callable[[str], None],
     is_cancelled: Optional[Callable[[], bool]] = None,
 ) -> str:
-    """Stream a response via the Anthropic API. Fast path when API key is set.
-
-    Splits the build_prompt output back into system + user content so the API
-    gets proper message structure instead of one big concatenated string.
-    """
+    """Stream a response via the Anthropic API. Fast path when API key is set."""
     try:
         import anthropic as _anthropic
     except ImportError:
@@ -399,8 +374,6 @@ def stream_anthropic(
 
     client = _anthropic.Anthropic()
 
-    # build_prompt() starts with SYSTEM_PROMPT then appends context blocks.
-    # Everything after it becomes the user turn.
     if prompt.startswith(SYSTEM_PROMPT):
         system = SYSTEM_PROMPT
         user_content = prompt[len(SYSTEM_PROMPT):].strip()
