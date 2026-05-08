@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   if (guide) {
     const { data: steps } = await supabase
       .from("setup_steps")
-      .select("id, step_number, section, title, description, status, target_urls")
+      .select("id, step_number, section, title, description, status, target_urls, code_blocks")
       .eq("guide_id", guide.id)
       .order("step_number");
 
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
       if (raw) {
         const tpl = STEP_TEMPLATES.find(t => t.title === (raw as any).title);
         currentStep = tpl
-          ? { ...raw, why: tpl.why, click_steps: tpl.click_steps, notes: tpl.notes, links: tpl.links }
+          ? { ...raw, why: tpl.why, click_steps: tpl.click_steps, notes: tpl.notes, links: tpl.links, code_blocks: (raw as any).code_blocks ?? [] }
           : raw;
       }
     }
