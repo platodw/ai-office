@@ -57,13 +57,13 @@ export default function SuggestionList({ initial }: { initial: Suggestion[] }) {
       const res = await fetch(`/api/admin/suggestions/${id}/approve`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        alert(`Couldn't open PR: ${data.error || "unknown"}`);
+        alert(`Couldn't deploy: ${data.error || "unknown"}`);
         location.reload();
         return;
       }
       setSuggestions(s =>
         s.map(x => x.id === id
-          ? { ...x, status: "approved" as const, pr_url: data.pr_url, pr_number: data.pr_number }
+          ? { ...x, status: (data.merged ? "merged" : "approved") as const, pr_url: data.pr_url, pr_number: data.pr_number }
           : x,
         ),
       );
@@ -213,7 +213,7 @@ function SuggestionCard({
             className="inline-flex items-center gap-1.5 bg-text hover:bg-text-2 text-bg font-semibold px-3 py-1.5 rounded-md text-xs transition-colors disabled:opacity-50"
           >
             {busy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-            Approve & open PR
+            Approve & deploy
           </button>
           <button
             onClick={onReject}

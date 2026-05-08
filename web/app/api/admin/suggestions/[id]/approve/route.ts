@@ -113,18 +113,25 @@ Approved from /admin/suggestions in the AI Office dashboard.`;
       body: prBody,
     });
 
-    // 6. Mark suggestion approved with PR link
+    // 6. Merge the PR immediately so Vercel picks it up
+    await octokit.pulls.merge({
+      owner: OWNER, repo: REPO,
+      pull_number: pr.number,
+      merge_method: "squash",
+    });
+
+    // 7. Mark suggestion merged with PR link
     await supabase
       .from("template_suggestions")
       .update({
-        status: "approved",
+        status: "merged",
         pr_url: pr.html_url,
         pr_number: pr.number,
         reviewed_at: new Date().toISOString(),
       })
       .eq("id", id);
 
-    return NextResponse.json({ ok: true, pr_url: pr.html_url, pr_number: pr.number });
+    return NextResponse.json({ ok: true, merged: true, pr_url: pr.html_url, pr_number: pr.number });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     await supabase
