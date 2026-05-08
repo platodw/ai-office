@@ -214,9 +214,16 @@ TIMEOUT_FRIENDLY = (
 
 def run_claude(prompt: str, claude_bin: str, timeout: int = DEFAULT_TIMEOUT_SEC) -> str:
     """One-shot fallback used by the HTTP server. Blocks until done."""
+    mcp_config = _ensure_empty_mcp_config()
     try:
         result = subprocess.run(
-            [claude_bin, "-p", "--permission-mode", "bypassPermissions", prompt],
+            [
+                claude_bin,
+                "--mcp-config", str(mcp_config),
+                "--strict-mcp-config",
+                "-p", "--permission-mode", "bypassPermissions",
+                prompt,
+            ],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -225,7 +232,12 @@ def run_claude(prompt: str, claude_bin: str, timeout: int = DEFAULT_TIMEOUT_SEC)
         output = result.stdout.strip()
         if not output and result.stderr.strip():
             result2 = subprocess.run(
-                [claude_bin, "-p", prompt],
+                [
+                    claude_bin,
+                    "--mcp-config", str(mcp_config),
+                    "--strict-mcp-config",
+                    "-p", prompt,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
