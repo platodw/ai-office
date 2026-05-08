@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       allSteps = steps;
       const raw = steps.find((s: { status: string }) => s.status === "pending" || s.status === "in_progress") ?? null;
       if (raw) {
-        const tpl = STEP_TEMPLATES.find(t => t.title === (raw as any).title);
+        const tpl = STEP_TEMPLATES.find(t => t.id === (raw as any).id) ?? STEP_TEMPLATES.find(t => t.title === (raw as any).title);
         currentStep = tpl
           ? { ...raw, why: tpl.why, click_steps: tpl.click_steps, notes: tpl.notes, links: tpl.links, code_blocks: (raw as any).code_blocks ?? [] }
           : raw;
