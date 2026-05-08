@@ -48,7 +48,7 @@ from core import (  # noqa: E402
     VERSION,
     build_prompt,
     detect_route,
-    stream_claude,
+    stream_response,
 )
 
 # Single-message writes need to be serialized when streaming threads + the
@@ -108,9 +108,9 @@ def stream_chat(request: dict) -> None:
         send_message({"type": "chat_chunk", "text": text})
 
     try:
-        stream_claude(
+        stream_response(
+            route=route,
             prompt=prompt,
-            claude_bin=route["claude_path"],
             on_chunk=on_chunk,
             is_cancelled=_cancel_flag.is_set,
         )
