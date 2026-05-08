@@ -16,6 +16,8 @@ const MODE_LABELS = {
 };
 
 let httpUrl = DEFAULT_HTTP_URL;
+let webAppUrl = "";
+let accountToken = "";
 let status = {
   connected: false,
   transport: null,         // "native" | "http" | null
@@ -25,8 +27,10 @@ let status = {
   version: null,
 };
 
-chrome.storage.local.get("server_url", (stored) => {
+chrome.storage.local.get(["server_url", "web_app_url", "account_token"], (stored) => {
   if (stored.server_url) httpUrl = stored.server_url;
+  if (stored.web_app_url) webAppUrl = stored.web_app_url.replace(/\/$/, "");
+  if (stored.account_token) accountToken = stored.account_token;
   refreshStatus();
 });
 
@@ -55,21 +59,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ ok: true });
     return false;
   }
+  if (msg.type === "set_web_config") {
+    if (msg.webAppUrl) webAppUrl = msg.webAppUrl.replace(/\/$/, "");
+    if (msg.accountToken) accountToken = msg.accountToken;
+    sendResponse({ ok: true });
+    return false;
+  }
   return false;
 });
 
 // ── Streaming chat (long-lived port) ─────────────────────────────────────────
-// Side panel opens a port named "chat" per turn; we forward streaming chunks
-// from the native host (or fall back to a one-shot HTTP request).
+// Side panel opens a port named "chat" per turn. Priority order:
+//   1. Vercel cloud endpoint (fast, always available, uses server-side API key)
+//   2. Native Messaging (local companion, streams)
+//   3. HTTP companion fallback (local, blocking)
 chrome.runtime.onConnect.addListener((sidePanelPort) => {
   if (sidePanelPort.name !== "chat") return;
   let nativePort = null;
+  let cloudAbort = null;
   let httpAbort = null;
   let cancelled = false;
 
   const cleanup = () => {
     cancelled = true;
     if (nativePort) { try { nativePort.disconnect(); } catch {} nativePort = null; }
+    if (cloudAbort) { try { cloudAbort.abort(); } catch {} cloudAbort = null; }
     if (httpAbort) { try { httpAbort.abort(); } catch {} httpAbort = null; }
   };
 
@@ -83,15 +97,24 @@ chrome.runtime.onConnect.addListener((sidePanelPort) => {
   sidePanelPort.onMessage.addListener(async (msg) => {
     if (msg.type === "cancel") {
       if (nativePort) { try { nativePort.postMessage({ type: "cancel" }); } catch {} }
-      // Tell the side panel BEFORE cleanup — cleanup sets cancelled=true,
-      // which would otherwise gate safePost from delivering this message.
       try { sidePanelPort.postMessage({ type: "cancelled" }); } catch {}
       cleanup();
       return;
     }
     if (msg.type !== "chat") return;
 
-    // Try Native Messaging, fall back to HTTP if it's not registered.
+    // 1. Try cloud endpoint first (fast, streaming SSE)
+    if (webAppUrl && accountToken) {
+      try {
+        await streamViaCloud(msg.payload);
+        return;
+      } catch {
+        if (cancelled) return;
+        // fall through to local companion
+      }
+    }
+
+    // 2. Try Native Messaging
     if (status.transport === "native" || status.transport === null) {
       try {
         await streamViaNative(msg.payload);
@@ -100,8 +123,49 @@ chrome.runtime.onConnect.addListener((sidePanelPort) => {
         if (cancelled) return;
       }
     }
+
+    // 3. HTTP fallback
     await streamViaHttp(msg.payload);
   });
+
+  async function streamViaCloud(payload) {
+    cloudAbort = new AbortController();
+    const url = `${webAppUrl}/api/extension/chat?token=${encodeURIComponent(accountToken)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: cloudAbort.signal,
+    });
+    if (!res.ok) throw new Error(`Cloud chat HTTP ${res.status}`);
+    if (!res.body) throw new Error("No response body");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (cancelled) { reader.cancel(); break; }
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        try {
+          const evt = JSON.parse(line.slice(6));
+          if (evt.type === "chunk") safePost({ type: "chunk", text: evt.text });
+          else if (evt.type === "done") { safePost({ type: "done", mode: "anthropic_api" }); return; }
+          else if (evt.type === "error") throw new Error(evt.error);
+        } catch (e) {
+          if (e instanceof SyntaxError) continue;
+          throw e;
+        }
+      }
+    }
+    safePost({ type: "done", mode: "anthropic_api" });
+  }
 
   function streamViaNative(payload) {
     return new Promise((resolve, reject) => {
@@ -209,16 +273,6 @@ function nativeRequest(payload, timeoutMs = 130000) {
 // ── HTTP fallback ────────────────────────────────────────────────────────────
 async function httpStatus() {
   const res = await fetch(`${httpUrl}/status`, { signal: AbortSignal.timeout(3000) });
-  return await res.json();
-}
-
-async function httpChat(payload) {
-  const res = await fetch(`${httpUrl}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
 
