@@ -16,7 +16,11 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-VERSION = "0.4.3"
+VERSION = "0.5.0"
+
+# Model used for all AI Office chat responses. Haiku is fast enough for
+# step-by-step setup guidance and dramatically reduces latency.
+CHAT_MODEL = "claude-haiku-4-5-20251001"
 
 # Cached path to an empty MCP config file. We pass this to `claude -p` along
 # with --strict-mcp-config so the user's MCP servers don't get spun up — they
@@ -70,10 +74,21 @@ def detect_route() -> dict:
     """Decide how to reach Claude and return a status dict.
 
     Shape: { mode, label, ready, claude_path?, version }
-      mode = "claude_desktop" | "anthropic_api" | "not_connected"
+      mode = "anthropic_api" | "claude_desktop" | "not_connected"
       label = plain-English description shown to the user
       ready = whether chat will actually work
+
+    Anthropic API is preferred when ANTHROPIC_API_KEY is set — it's
+    10-50x faster than spawning claude -p for each request.
     """
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return {
+            "mode": "anthropic_api",
+            "label": "Using Anthropic API key (fast mode).",
+            "ready": True,
+            "version": VERSION,
+        }
+
     claude_path = find_claude()
     if claude_path:
         return {
@@ -81,14 +96,6 @@ def detect_route() -> dict:
             "label": "Claude Desktop is connected. Using your Claude subscription.",
             "ready": True,
             "claude_path": claude_path,
-            "version": VERSION,
-        }
-
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return {
-            "mode": "anthropic_api",
-            "label": "Using your Anthropic API key.",
-            "ready": False,
             "version": VERSION,
         }
 
@@ -215,15 +222,15 @@ TIMEOUT_FRIENDLY = (
 def run_claude(prompt: str, claude_bin: str, timeout: int = DEFAULT_TIMEOUT_SEC) -> str:
     """One-shot fallback used by the HTTP server. Blocks until done."""
     mcp_config = _ensure_empty_mcp_config()
+    base_args = [
+        claude_bin,
+        "--mcp-config", str(mcp_config),
+        "--strict-mcp-config",
+        "--model", CHAT_MODEL,
+    ]
     try:
         result = subprocess.run(
-            [
-                claude_bin,
-                "--mcp-config", str(mcp_config),
-                "--strict-mcp-config",
-                "-p", "--permission-mode", "bypassPermissions",
-                prompt,
-            ],
+            base_args + ["-p", "--permission-mode", "bypassPermissions", prompt],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -232,12 +239,7 @@ def run_claude(prompt: str, claude_bin: str, timeout: int = DEFAULT_TIMEOUT_SEC)
         output = result.stdout.strip()
         if not output and result.stderr.strip():
             result2 = subprocess.run(
-                [
-                    claude_bin,
-                    "--mcp-config", str(mcp_config),
-                    "--strict-mcp-config",
-                    "-p", prompt,
-                ],
+                base_args + ["-p", prompt],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -283,6 +285,7 @@ def stream_claude(
         # consumed as another config path.
         "--mcp-config", str(mcp_config),
         "--strict-mcp-config",
+        "--model", CHAT_MODEL,
         "-p",
         "--output-format=stream-json",
         "--include-partial-messages",
@@ -377,6 +380,68 @@ def stream_claude(
     return "".join(pieces).strip()
 
 
+def stream_anthropic(
+    prompt: str,
+    on_chunk: Callable[[str], None],
+    is_cancelled: Optional[Callable[[], bool]] = None,
+) -> str:
+    """Stream a response via the Anthropic API. Fast path when API key is set.
+
+    Splits the build_prompt output back into system + user content so the API
+    gets proper message structure instead of one big concatenated string.
+    """
+    try:
+        import anthropic as _anthropic
+    except ImportError:
+        raise RuntimeError(
+            "anthropic package not installed. Run: pip install anthropic"
+        )
+
+    client = _anthropic.Anthropic()
+
+    # build_prompt() starts with SYSTEM_PROMPT then appends context blocks.
+    # Everything after it becomes the user turn.
+    if prompt.startswith(SYSTEM_PROMPT):
+        system = SYSTEM_PROMPT
+        user_content = prompt[len(SYSTEM_PROMPT):].strip()
+    else:
+        system = SYSTEM_PROMPT
+        user_content = prompt
+
+    pieces: list[str] = []
+    with client.messages.stream(
+        model=CHAT_MODEL,
+        max_tokens=1024,
+        system=system,
+        messages=[{"role": "user", "content": user_content}],
+    ) as stream:
+        for text in stream.text_stream:
+            if is_cancelled and is_cancelled():
+                break
+            pieces.append(text)
+            on_chunk(text)
+    return "".join(pieces)
+
+
+def run_anthropic(prompt: str) -> str:
+    """One-shot Anthropic API call for the HTTP fallback path."""
+    chunks: list[str] = []
+    stream_anthropic(prompt, on_chunk=chunks.append)
+    return "".join(chunks) or "(no response)"
+
+
+def stream_response(
+    route: dict,
+    prompt: str,
+    on_chunk: Callable[[str], None],
+    is_cancelled: Optional[Callable[[], bool]] = None,
+) -> str:
+    """Dispatch to the fastest available backend."""
+    if route["mode"] == "anthropic_api":
+        return stream_anthropic(prompt, on_chunk, is_cancelled)
+    return stream_claude(prompt, route["claude_path"], on_chunk, is_cancelled=is_cancelled)
+
+
 def handle_chat(payload: dict) -> dict:
     """Single dispatch point for a chat request. Returns a response dict."""
     message = (payload.get("message") or "").strip()
@@ -402,5 +467,8 @@ def handle_chat(payload: dict) -> dict:
         user_profile=payload.get("user_profile"),
         user_questionnaire=payload.get("user_questionnaire"),
     )
-    response = run_claude(prompt, route["claude_path"])
+    if route["mode"] == "anthropic_api":
+        response = run_anthropic(prompt)
+    else:
+        response = run_claude(prompt, route["claude_path"])
     return {"response": response, "mode": route["mode"]}
