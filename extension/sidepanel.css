@@ -248,6 +248,20 @@ body {
 .step-detail-note { color: var(--ao-ink-soft); margin-top: 6px !important; }
 .step-detail-links { margin-top: 8px !important; }
 .step-detail-links a { color: var(--ao-accent); text-decoration: underline; }
+.step-detail-code {
+  margin: 6px 0 4px;
+  background: rgba(0,0,0,0.07);
+  border-radius: 5px;
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+.step-detail-code code {
+  font-family: monospace;
+  font-size: 0.88em;
+  white-space: pre;
+  background: none;
+  padding: 0;
+}
 
 /* ── Quick Actions ── */
 .quick-actions {

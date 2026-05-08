@@ -326,6 +326,11 @@ function renderStepDetail(step) {
   if (step.click_steps?.length) {
     parts.push(`<ol>${step.click_steps.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ol>`);
   }
+  if (step.code_blocks?.length) {
+    parts.push(step.code_blocks.map(b =>
+      `<pre class="step-detail-code"><code>${escapeHtml(b.content || b)}</code></pre>`
+    ).join(""));
+  }
   if (step.notes?.length) {
     parts.push(step.notes.map(n => `<p class="step-detail-note">💡 ${escapeHtml(n)}</p>`).join(""));
   }
@@ -416,7 +421,15 @@ async function sendMessage() {
   const thinkingEl = appendMessage("thinking", "Thinking...");
 
   const stepContext = currentStep
-    ? { id: currentStep.id, title: currentStep.title, description: currentStep.description }
+    ? {
+        id: currentStep.id,
+        title: currentStep.title,
+        description: currentStep.description,
+        why: currentStep.why,
+        click_steps: currentStep.click_steps,
+        code_blocks: currentStep.code_blocks,
+        notes: currentStep.notes,
+      }
     : null;
 
   // Replace the static "Thinking..." with a live elapsed-time indicator + Cancel.
