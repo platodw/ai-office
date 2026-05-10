@@ -14,6 +14,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </Link>
         <nav className="flex items-center gap-5">
           <Link href="/portal" className="text-sm text-muted hover:text-text transition-colors">Home</Link>
+          <Link href="/portal/chat" className="text-sm text-muted hover:text-text transition-colors">Chat</Link>
           <Link href="/portal/billing" className="text-sm text-muted hover:text-text transition-colors">Billing</Link>
           <Link href="/portal/support" className="text-sm text-muted hover:text-text transition-colors">Support</Link>
           <LogoutButton />

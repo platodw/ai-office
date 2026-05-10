@@ -10,6 +10,7 @@ export default async function PortalSupport() {
     .from("support_tickets")
     .select("id, title, status, priority, created_at, updated_at")
     .eq("client_id", clientId)
+    .eq("kind", "ticket")
     .order("created_at", { ascending: false });
 
   const open   = tickets?.filter((t) => !["closed", "resolved"].includes(t.status)) ?? [];

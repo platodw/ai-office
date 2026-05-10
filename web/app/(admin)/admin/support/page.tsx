@@ -7,6 +7,7 @@ export default async function AdminSupport({ searchParams }: { searchParams: Pro
   let query = supabase
     .from("support_tickets")
     .select("id, title, status, priority, created_at, clients(id, name)")
+    .eq("kind", "ticket")
     .order("created_at", { ascending: false });
 
   if (statusFilter) query = query.eq("status", statusFilter);
