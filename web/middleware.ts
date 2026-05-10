@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
 
   const isAuth         = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/admin-login") || pathname.startsWith("/update-password");
   const isApp          = pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding") || pathname.startsWith("/guide") || pathname.startsWith("/guide-suggestions");
-  const isAdmin        = pathname.startsWith("/admin");
+  const isAdmin        = pathname === "/admin" || pathname.startsWith("/admin/");
   const isPortal       = pathname.startsWith("/portal");
 
   // Unauthenticated users hitting /admin go to the admin login page.
