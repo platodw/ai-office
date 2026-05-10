@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle, Zap, Wrench, BarChart3, Chrome, Mail, GitBranch, FileText, Search, BookOpen, MessageSquare } from "lucide-react";
+import { ArrowRight, CheckCircle, Mail, GitBranch, FileText, Search, BookOpen, MessageSquare } from "lucide-react";
 import { LogoMark } from "@/components/logo-mark";
 
 export default function Home() {
@@ -12,7 +12,6 @@ export default function Home() {
         <HowItWorks />
         <About />
         <Pricing />
-        <ExtensionCallout />
         <FinalCTA />
       </main>
       <Footer />
@@ -501,76 +500,6 @@ function ProjectTier({ label, price, desc }: { label: string; price: string; des
         <span className="text-sm font-bold text-primary-dark">{price}</span>
       </div>
       <p className="text-xs text-text-2 leading-relaxed">{desc}</p>
-    </div>
-  );
-}
-
-// ── Extension callout ─────────────────────────────────────────────────────────
-
-function ExtensionCallout() {
-  return (
-    <section className="py-20 sm:py-24">
-      <div className="max-w-6xl mx-auto px-6">
-        <div className="bg-surface-2 border border-border rounded-2xl p-8 sm:p-10 grid md:grid-cols-2 gap-8 items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 bg-primary-soft border border-border rounded-full px-3 py-1.5 mb-5">
-              <Chrome size={12} className="text-primary-dark" />
-              <span className="text-xs font-medium text-primary-dark">Included with onboarding</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-text tracking-tight mb-4">
-              The AI Office browser extension
-            </h2>
-            <p className="text-text-2 text-sm leading-relaxed mb-5">
-              Every onboarded client gets access to the AI Office Chrome extension. It sits in your
-              browser, knows what page you&apos;re on, and gives your power users a direct line to your
-              AI tools without switching apps. Ask questions, run workflows, get help on any page.
-            </p>
-            <ul className="space-y-2">
-              {[
-                "Works on any webpage",
-                "Connected to all your AI tools",
-                "Page-aware context",
-              ].map((f) => (
-                <li key={f} className="flex items-center gap-2 text-sm text-text-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Extension preview */}
-          <ExtensionPreview />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ExtensionPreview() {
-  return (
-    <div className="bg-surface border border-border rounded-xl shadow-[0_12px_40px_-12px_rgba(31,26,20,0.15)] p-4 max-w-xs w-full mx-auto">
-      <div className="flex items-center justify-between pb-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <LogoMark size={16} />
-          <span className="text-xs font-semibold text-text">AI Office</span>
-        </div>
-        <span className="w-2 h-2 rounded-full bg-success" />
-      </div>
-      <div className="mt-3 flex items-center gap-2 bg-bg border border-border rounded-full px-3 py-1.5 w-fit">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-        <span className="text-xs font-mono text-text-2">app.hubspot.com</span>
-      </div>
-      <div className="mt-3 space-y-2.5">
-        <div className="flex justify-end">
-          <div className="bg-primary text-bg text-xs font-medium px-3 py-1.5 rounded-2xl rounded-br-sm max-w-[75%]">
-            Summarize this contact&apos;s recent activity
-          </div>
-        </div>
-        <div className="bg-bg text-text-2 text-xs px-3 py-2 rounded-2xl rounded-bl-sm max-w-[90%] leading-relaxed border border-border">
-          Their last 3 emails were about pricing. They opened your proposal twice but haven&apos;t replied. A follow-up makes sense.
-        </div>
-      </div>
     </div>
   );
 }
