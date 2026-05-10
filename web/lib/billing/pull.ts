@@ -83,8 +83,10 @@ async function pullOneConfig(
       result = await pullVercelBilling(config.external_id, credential, periodStart, periodEnd);
       break;
     case "supabase":
-      result = await pullSupabaseBilling(config.external_id, credential, periodStart, periodEnd);
-      break;
+      // Supabase does not expose a programmatic per-project cost API.
+      // Costs are flat-rate ($25/mo Pro) and billed at the org level.
+      // Skip automated pulls — enter costs manually via invoices.
+      return { ...base, status: "skipped", message: "Supabase billing API unavailable — enter costs manually" };
     default:
       return { ...base, status: "skipped", message: `Unknown provider: ${config.provider}` };
   }
