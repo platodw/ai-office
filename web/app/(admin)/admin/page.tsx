@@ -97,7 +97,7 @@ async function RecentTickets() {
                 <div>
                   <div className="text-sm text-text leading-tight">{t.title}</div>
                   <div className="text-xs text-muted mt-0.5">
-                    {(t.clients as { name: string } | null)?.name}
+                    {(t.clients as unknown as { name: string } | null)?.name}
                   </div>
                 </div>
                 <StatusBadge status={t.status} />
