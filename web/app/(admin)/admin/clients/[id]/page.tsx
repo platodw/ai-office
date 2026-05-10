@@ -202,7 +202,7 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
 
         {/* Portal users */}
         <div className="col-span-2 bg-surface-2 border border-border rounded-xl p-5">
-          <PortalUsersPanel clientId={id} initial={(portalUsers ?? []) as Parameters<typeof PortalUsersPanel>[0]["initial"]} />
+          <PortalUsersPanel clientId={id} initial={(portalUsers ?? []) as unknown as Parameters<typeof PortalUsersPanel>[0]["initial"]} />
         </div>
 
         {/* Transfer / offboarding */}
