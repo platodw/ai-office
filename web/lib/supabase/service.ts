@@ -10,17 +10,12 @@ export function createServiceClient() {
 }
 
 // Retrieve a secret from Supabase Vault by name.
-// Returns null if the secret doesn't exist or vault isn't configured.
+// Uses an RPC wrapper because PostgREST can't query vault schema tables directly.
 export async function getVaultSecret(name: string): Promise<string | null> {
   const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("vault.decrypted_secrets")
-    .select("decrypted_secret")
-    .eq("name", name)
-    .single();
-
+  const { data, error } = await supabase.rpc("admin_get_vault_secret", { p_name: name });
   if (error || !data) return null;
-  return (data as { decrypted_secret: string }).decrypted_secret;
+  return data as string;
 }
 
 // Store (or overwrite) a secret in Supabase Vault. Returns the secret UUID.
