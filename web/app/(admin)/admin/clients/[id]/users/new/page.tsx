@@ -30,6 +30,7 @@ export default function NewPortalUserPage() {
     const data = await res.json();
     if (!res.ok) { setError(data.error); setSaving(false); return; }
     router.push(`/admin/clients/${clientId}`);
+    router.refresh();
   }
 
   return (
