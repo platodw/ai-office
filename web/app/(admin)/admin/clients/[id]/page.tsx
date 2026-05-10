@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import PortalUsersPanel from "./PortalUsersPanel";
 
 export default async function AdminClientDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,15 +12,19 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
     { data: contacts },
     { data: techInfo },
     { data: apiConfigs },
+    { data: services },
     { data: invoices },
     { data: tickets },
+    { data: portalUsers },
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("id", id).single(),
     supabase.from("client_contacts").select("*").eq("client_id", id).order("is_primary", { ascending: false }),
     supabase.from("client_tech_info").select("*").eq("client_id", id).single(),
     supabase.from("client_api_configs").select("id, provider, display_name, external_id, is_active").eq("client_id", id),
+    supabase.from("client_services").select("id, name, type, amount_cents, billing_start, billing_end, status").eq("client_id", id).order("billing_start", { ascending: false }),
     supabase.from("invoices").select("id, invoice_number, status, total_cents, due_date").eq("client_id", id).order("issued_date", { ascending: false }).limit(5),
     supabase.from("support_tickets").select("id, title, status, priority, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(5),
+    supabase.from("client_users").select("id, user_id, portal_role, created_at, profiles(name, email)").eq("client_id", id).order("created_at"),
   ]);
 
   if (!client) notFound();
@@ -121,8 +126,35 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
           )}
         </Section>
 
+        {/* Services */}
+        <Section title="Services" action={{ label: "Add service", href: `/admin/clients/${id}/services/new` }}>
+          {!services?.length ? (
+            <Empty>No services added. Add a project, retainer, or one-time fee.</Empty>
+          ) : (
+            <ul className="space-y-2">
+              {services.map((s) => (
+                <li key={s.id} className="flex items-start justify-between py-1.5">
+                  <div>
+                    <div className="text-sm font-medium text-text">{s.name}</div>
+                    <div className="text-xs text-muted">
+                      {s.type === "recurring_monthly" ? "Monthly" : "One-time"} &middot; ${(s.amount_cents / 100).toFixed(2)}
+                      {s.type === "recurring_monthly" && (
+                        <span> &middot; {new Date(s.billing_start).toLocaleDateString("en-US", { month: "short", year: "numeric" })}{s.billing_end ? ` – ${new Date(s.billing_end).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : " (ongoing)"}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                    <ServiceStatusBadge status={s.status} />
+                    <a href={`/admin/clients/${id}/services/${s.id}/edit`} className="text-xs text-muted hover:text-text transition-colors">Edit</a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
         {/* Recent invoices */}
-        <Section title="Recent invoices" action={{ label: "View all", href: `/admin/billing?client=${id}` }}>
+        <Section title="Recent invoices" action={{ label: "New invoice", href: `/admin/billing/new?client=${id}` }}>
           {!invoices?.length ? (
             <Empty>No invoices yet.</Empty>
           ) : (
@@ -158,6 +190,11 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
             </ul>
           )}
         </Section>
+
+        {/* Portal users */}
+        <div className="col-span-2 bg-surface-2 border border-border rounded-xl p-5">
+          <PortalUsersPanel clientId={id} initial={(portalUsers ?? []) as Parameters<typeof PortalUsersPanel>[0]["initial"]} />
+        </div>
 
         {/* Transfer / offboarding */}
         <Section title="Account transfer">
@@ -216,6 +253,13 @@ const INVOICE_STATUS: Record<string, string> = {
 };
 function InvoiceStatusBadge({ status }: { status: string }) {
   return <span className={`text-[10px] font-semibold ${INVOICE_STATUS[status] ?? "text-muted"}`}>{status}</span>;
+}
+
+const SERVICE_STATUS: Record<string, string> = {
+  active: "bg-success/10 text-success", completed: "bg-surface text-muted", cancelled: "bg-error/10 text-error",
+};
+function ServiceStatusBadge({ status }: { status: string }) {
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${SERVICE_STATUS[status] ?? "bg-surface text-muted"}`}>{status}</span>;
 }
 
 const TICKET_STATUS: Record<string, string> = {

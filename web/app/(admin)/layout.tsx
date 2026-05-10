@@ -22,6 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <NavLink href="/admin/clients">Clients</NavLink>
           <NavLink href="/admin/billing">Billing</NavLink>
           <NavLink href="/admin/support">Support</NavLink>
+          <NavLink href="/admin/settings">Settings</NavLink>
         </nav>
         <div className="px-4 py-3 border-t border-border">
           <LogoutButton />
