@@ -27,18 +27,23 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
-  const isAuth    = pathname.startsWith("/login") || pathname.startsWith("/signup");
-  const isApp     = pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding") || pathname.startsWith("/guide") || pathname.startsWith("/guide-suggestions");
-  const isAdmin   = pathname.startsWith("/admin");
-  const isPortal  = pathname.startsWith("/portal");
+  const isAuth         = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/admin-login") || pathname.startsWith("/update-password");
+  const isApp          = pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding") || pathname.startsWith("/guide") || pathname.startsWith("/guide-suggestions");
+  const isAdmin        = pathname.startsWith("/admin");
+  const isPortal       = pathname.startsWith("/portal");
 
-  // Unauthenticated users can't reach any protected route.
-  if ((isApp || isAdmin || isPortal) && !user) {
+  // Unauthenticated users hitting /admin go to the admin login page.
+  if (isAdmin && !user) {
+    return NextResponse.redirect(new URL("/admin-login", request.url));
+  }
+
+  // Unauthenticated users hitting other protected routes go to the regular login.
+  if ((isApp || isPortal) && !user) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Authenticated users don't need the auth pages.
-  if (isAuth && user) {
+  // Authenticated users don't need the auth pages (except update-password which needs a session).
+  if ((pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/admin-login")) && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
