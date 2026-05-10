@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient, getVaultSecret } from "@/lib/supabase/service";
+import { createServiceClient } from "@/lib/supabase/service";
 import { requireClientUser } from "@/lib/auth";
 import { runTurn, type ChatTurn } from "@/lib/agent/runtime";
 
@@ -23,20 +23,12 @@ export async function POST(request: Request) {
     .single();
   if (!client) return NextResponse.json({ error: "client not found" }, { status: 404 });
 
-  const { data: anthropicConfig } = await admin
-    .from("client_api_configs")
-    .select("vault_secret_name")
-    .eq("client_id", clientId)
-    .eq("provider", "anthropic")
-    .eq("is_active", true)
-    .maybeSingle();
-
-  let apiKey: string | null = null;
-  if (anthropicConfig?.vault_secret_name) {
-    apiKey = await getVaultSecret(anthropicConfig.vault_secret_name);
-  }
-  if (!apiKey) apiKey = process.env.ANTHROPIC_API_KEY ?? null;
-  if (!apiKey) return NextResponse.json({ error: "no Anthropic API key configured" }, { status: 500 });
+  // Use the shared inference key. The per-client client_api_configs rows are
+  // for billing-side workspace IDs (admin keys), not Messages-API inference
+  // keys, so we don't try to use them here. When per-client inference keys
+  // become useful, add a 'purpose' column and pick the support one.
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
 
   // Find or create the conversation.
   let conversationId: string;
