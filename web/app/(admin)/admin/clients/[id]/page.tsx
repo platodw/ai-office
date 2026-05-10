@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import PortalUsersPanel from "./PortalUsersPanel";
+import ClientStatusSelect from "./ClientStatusSelect";
 
 export default async function AdminClientDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -54,7 +55,7 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
             {client.notes && <p className="text-sm text-muted mt-0.5">{client.notes}</p>}
           </div>
         </div>
-        <StatusBadge status={client.status} />
+        <ClientStatusSelect clientId={id} initial={client.status} />
       </div>
 
       <div className="grid grid-cols-2 gap-6">
