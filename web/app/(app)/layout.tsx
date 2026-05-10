@@ -9,6 +9,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Portal users (clients) shouldn't see the Chrome-extension setup app.
+  // Bounce them to their portal regardless of how they landed here.
+  const { data: membership } = await supabase
+    .from("client_users")
+    .select("client_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (membership) redirect("/portal");
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between flex-shrink-0">

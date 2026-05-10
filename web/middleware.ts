@@ -43,8 +43,11 @@ export async function middleware(request: NextRequest) {
   }
 
   // Authenticated users don't need the auth pages (except update-password which needs a session).
+  // Route them to the surface that matches their role: admin → /admin,
+  // portal user → /portal, otherwise the Chrome-extension setup app at /dashboard.
   if ((pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/admin-login")) && user) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const dest = await resolvePostLoginDestination(supabase, user.id);
+    return NextResponse.redirect(new URL(dest, request.url));
   }
 
   // Admin routes get a second server-side role check in the layout (defense in depth).
@@ -56,3 +59,22 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
 };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolvePostLoginDestination(supabase: any, userId: string): Promise<string> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profile?.is_admin) return "/admin";
+
+  const { data: membership } = await supabase
+    .from("client_users")
+    .select("client_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (membership) return "/portal";
+
+  return "/dashboard";
+}
