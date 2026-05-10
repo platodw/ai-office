@@ -126,14 +126,14 @@ async function pullOneConfig(
   return { ...base, status: "success", amountCents: result.amountCents };
 }
 
-// Resolve billing period — defaults to the previous calendar month.
+// Resolve billing period — defaults to the current calendar month (1st → last day).
+// Running daily, this upserts the same month record each time with fresh MTD spend.
 function resolvePeriod(start?: Date, end?: Date): { start: Date; end: Date } {
   if (start && end) return { start, end };
 
   const now = new Date();
-  const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastOfPrevMonth  = new Date(firstOfThisMonth.getTime() - 1);
-  const firstOfPrevMonth = new Date(lastOfPrevMonth.getFullYear(), lastOfPrevMonth.getMonth(), 1);
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastOfMonth  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  return { start: firstOfPrevMonth, end: lastOfPrevMonth };
+  return { start: firstOfMonth, end: lastOfMonth };
 }
