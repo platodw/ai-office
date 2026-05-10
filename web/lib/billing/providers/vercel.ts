@@ -33,6 +33,14 @@ export async function pullVercelBilling(
 
   if (!res.ok) {
     const body = await res.text();
+    // costs_not_found means no billable charges in the period (within free tier).
+    // Treat as a successful $0 result rather than an error.
+    try {
+      const parsed = JSON.parse(body) as { error?: { code?: string } };
+      if (parsed?.error?.code === "costs_not_found") {
+        return { amountCents: 0, currency: "usd", rawData: { note: "no_charges" } };
+      }
+    } catch { /* not JSON, fall through */ }
     throw new Error(`Vercel billing API ${res.status}: ${body}`);
   }
 

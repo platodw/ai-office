@@ -1,26 +1,30 @@
 // Supabase project usage billing provider.
-// Pulls compute, database, bandwidth, and storage usage for a project.
 //
-// API ref: https://api.supabase.com/api/v1#tag/projects/GET/v1/projects/{ref}/usage
-// Endpoint: GET https://api.supabase.com/v1/projects/{projectRef}/usage
-// Auth header: Authorization: Bearer <management_api_token>
+// NOTE: Supabase does not expose a per-project cost API. Billing is at the
+// organization level and is mostly flat-rate (Pro = $25/mo + add-ons).
+// This provider uses the project subscription endpoint to return the base
+// plan cost. Variable usage (storage overages, egress, etc.) is not included.
+//
+// API ref: https://api.supabase.com/api/v1
+// Endpoint: GET https://api.supabase.com/v1/projects/{ref}/subscription
+// Auth: Authorization: Bearer <PAT>  (Personal Access Token, not service_role key)
 
 import type { BillingResult } from "./anthropic";
+
+const PLAN_MONTHLY_CENTS: Record<string, number> = {
+  free:       0,
+  pro:        2500,  // $25/mo
+  team:       59900, // $599/mo
+  enterprise: 0,     // custom pricing
+};
 
 export async function pullSupabaseBilling(
   projectRef: string,
   managementToken: string,
-  periodStart: Date,
-  periodEnd: Date
+  _periodStart: Date,
+  _periodEnd: Date
 ): Promise<BillingResult> {
-  const startDate = periodStart.toISOString().slice(0, 10);
-  const endDate   = periodEnd.toISOString().slice(0, 10);
-
-  const url = new URL(`https://api.supabase.com/v1/projects/${projectRef}/usage`);
-  url.searchParams.set("start_date", startDate);
-  url.searchParams.set("end_date",   endDate);
-
-  const res = await fetch(url.toString(), {
+  const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/subscription`, {
     headers: {
       Authorization: `Bearer ${managementToken}`,
       "Content-Type": "application/json",
@@ -29,36 +33,21 @@ export async function pullSupabaseBilling(
 
   if (!res.ok) {
     const body = await res.text();
-    // 401 usually means a service_role JWT was stored instead of a PAT.
-    // The Supabase Management API requires a Personal Access Token from
-    // supabase.com/dashboard/account/tokens, not a project service_role key.
     if (res.status === 401) {
       throw new Error(
-        `Supabase usage API 401: credential must be a Personal Access Token (PAT) ` +
-        `from supabase.com/dashboard/account/tokens, not a service_role key. Original: ${body}`
+        `Supabase API 401: credential must be a Personal Access Token (PAT, sbp_...) ` +
+        `from supabase.com/dashboard/account/tokens, not a service_role key. Raw: ${body}`
       );
     }
-    throw new Error(`Supabase usage API ${res.status}: ${body}`);
+    throw new Error(`Supabase subscription API ${res.status}: ${body}`);
   }
 
-  const data = await res.json() as {
-    usage_billing_enabled?: boolean;
-    compute?: { cost?: number };
-    egress?: { cost?: number };
-    storage?: { cost?: number };
-    realtime?: { cost?: number };
-  };
-
-  // Sum across known metered dimensions. Each cost field is in USD.
-  const totalUsd = (
-    (data.compute?.cost  ?? 0) +
-    (data.egress?.cost   ?? 0) +
-    (data.storage?.cost  ?? 0) +
-    (data.realtime?.cost ?? 0)
-  );
+  const data = await res.json() as { tier?: { key?: string } };
+  const planKey = data?.tier?.key?.toLowerCase() ?? "unknown";
+  const amountCents = PLAN_MONTHLY_CENTS[planKey] ?? 0;
 
   return {
-    amountCents: Math.round(totalUsd * 100),
+    amountCents,
     currency: "usd",
     rawData: data as Record<string, unknown>,
   };
