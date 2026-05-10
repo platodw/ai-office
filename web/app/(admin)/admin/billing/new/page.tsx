@@ -33,8 +33,8 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
         .eq("period_start", monthStart)
         .eq("period_end", monthEnd),
     ]);
-    preloadedServices  = (services  ?? []) as PreloadedService[];
-    preloadedSnapshots = (snapshots ?? []) as PreloadedSnapshot[];
+    preloadedServices  = (services  ?? []) as unknown as PreloadedService[];
+    preloadedSnapshots = (snapshots ?? []) as unknown as PreloadedSnapshot[];
   }
 
   return (
