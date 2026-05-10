@@ -197,7 +197,7 @@ export default async function DashboardPage() {
 
       {profile?.is_admin && (
         <div className="mt-6 text-right">
-          <Link href="/admin/suggestions" className="text-xs text-muted hover:text-primary transition-colors">
+          <Link href="/guide-suggestions" className="text-xs text-muted hover:text-primary transition-colors">
             Admin → Suggestions
           </Link>
         </div>

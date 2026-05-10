@@ -1,3 +1,9 @@
 {
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/billing-pull",
+      "schedule": "0 6 1 * *"
+    }
+  ]
 }

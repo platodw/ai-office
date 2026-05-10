@@ -27,17 +27,23 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
-  const isAuth = pathname.startsWith("/login") || pathname.startsWith("/signup");
-  const isApp = pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/guide");
+  const isAuth    = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const isApp     = pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding") || pathname.startsWith("/guide") || pathname.startsWith("/guide-suggestions");
+  const isAdmin   = pathname.startsWith("/admin");
+  const isPortal  = pathname.startsWith("/portal");
 
-  if (isApp && !user) {
+  // Unauthenticated users can't reach any protected route.
+  if ((isApp || isAdmin || isPortal) && !user) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
+
+  // Authenticated users don't need the auth pages.
   if (isAuth && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
+
+  // Admin routes get a second server-side role check in the layout (defense in depth).
+  // Middleware only enforces the auth session — role enforcement lives in requireAdmin().
 
   return supabaseResponse;
 }

@@ -17,7 +17,7 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "AI Office",
-  description: "Set up Claude the right way — guided, connected, and built around your workflow.",
+  description: "Custom AI tools built for your business. We build, deploy, and manage AI that fits the way you actually work.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
