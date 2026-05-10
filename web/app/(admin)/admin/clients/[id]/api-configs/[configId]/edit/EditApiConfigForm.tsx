@@ -4,11 +4,38 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 
-const ID_LABELS: Record<string, string> = {
-  anthropic: "Workspace ID",
-  vercel:    "Team slug",
-  supabase:  "Project ref",
-  other:     "Account ID",
+const PROVIDER_META: Record<string, {
+  idLabel: string; idHelp: string;
+  keyLabel: string; keyHelp: string; keyPlaceholder: string;
+}> = {
+  anthropic: {
+    idLabel:        "Workspace ID",
+    idHelp:         "Per-client — each client needs their own workspace. Go to console.anthropic.com → Settings → Workspaces, click the workspace, and copy the ID from the URL (e.g. wrkspc_01...).",
+    keyLabel:       "Admin API key",
+    keyHelp:        "Shared across clients — one Admin key covers all workspaces in your Anthropic org. Must be an Admin key (sk-ant-admin...), not a regular API key. Create at console.anthropic.com → Settings → Admin API Keys.",
+    keyPlaceholder: "sk-ant-admin...",
+  },
+  vercel: {
+    idLabel:        "Team slug or ID",
+    idHelp:         "Shared — your Vercel team slug from the dashboard URL (e.g. dan-platos-projects). Use the client's team slug if they have their own Vercel account.",
+    keyLabel:       "API token",
+    keyHelp:        "Shared across clients — one token covers all teams under your Vercel account. Create at vercel.com/account/tokens. Use the client's token if they have their own Vercel account.",
+    keyPlaceholder: "vercel_...",
+  },
+  supabase: {
+    idLabel:        "Project ref",
+    idHelp:         "Per-client — each Supabase project has a unique ref. Found in Supabase dashboard → Project Settings → General (e.g. zzeidumlgcvp...).",
+    keyLabel:       "Personal Access Token (PAT)",
+    keyHelp:        "Shared across clients — one PAT covers all projects under your Supabase account. Must be a PAT (sbp_...), not a project service_role key. Create at supabase.com/dashboard/account/tokens.",
+    keyPlaceholder: "sbp_...",
+  },
+  other: {
+    idLabel:        "Account ID",
+    idHelp:         "The identifier used to pull billing data for this provider.",
+    keyLabel:       "API key",
+    keyHelp:        "The API key or token used to authenticate with this provider.",
+    keyPlaceholder: "API key…",
+  },
 };
 
 interface Config {
@@ -36,7 +63,7 @@ export default function EditApiConfigForm({
   const [submitting, setSubmitting]   = useState(false);
   const [error, setError]             = useState<string | null>(null);
 
-  const idLabel = ID_LABELS[config.provider] ?? "Account ID";
+  const meta = PROVIDER_META[config.provider] ?? PROVIDER_META.other;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -84,7 +111,7 @@ export default function EditApiConfigForm({
         />
       </Field>
 
-      <Field label={idLabel} required>
+      <Field label={meta.idLabel} required hint={meta.idHelp}>
         <input
           type="text"
           value={externalId}
@@ -94,13 +121,13 @@ export default function EditApiConfigForm({
         />
       </Field>
 
-      <Field label="New API key" hint="Leave blank to keep the existing key. Enter a new value to replace it.">
+      <Field label={`New ${meta.keyLabel}`} hint={`${meta.keyHelp} Leave blank to keep the existing key.`}>
         <div className="relative">
           <input
             type={showKey ? "text" : "password"}
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
-            placeholder="Enter new key to replace existing…"
+            placeholder={`Enter new ${meta.keyPlaceholder} to replace existing…`}
             className={`${inputCls} pr-10 font-mono`}
             autoComplete="off"
           />

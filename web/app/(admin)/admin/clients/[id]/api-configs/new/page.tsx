@@ -5,10 +5,42 @@ import { useRouter, useParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 
 const PROVIDERS = [
-  { value: "anthropic", label: "Anthropic",  idLabel: "Workspace ID",  idHelp: "Found in console.anthropic.com → Settings → API" },
-  { value: "vercel",    label: "Vercel",     idLabel: "Team slug",     idHelp: "The identifier in your Vercel dashboard URL (e.g. my-team)" },
-  { value: "supabase",  label: "Supabase",   idLabel: "Project ref",   idHelp: "Found in Supabase dashboard → Project Settings → General" },
-  { value: "other",     label: "Other",      idLabel: "Account ID",    idHelp: "The identifier used to pull billing data for this account" },
+  {
+    value:   "anthropic",
+    label:   "Anthropic",
+    idLabel: "Workspace ID",
+    idHelp:  "Per-client — each client needs their own workspace. Go to console.anthropic.com → Settings → Workspaces, click the workspace, and copy the ID from the URL (e.g. wrkspc_01...).",
+    keyLabel: "Admin API key",
+    keyHelp:  "Shared across clients — one Admin key covers all workspaces in your Anthropic org. Must be an Admin key (sk-ant-admin...), not a regular API key. Create one at console.anthropic.com → Settings → Admin API Keys.",
+    keyPlaceholder: "sk-ant-admin...",
+  },
+  {
+    value:   "vercel",
+    label:   "Vercel",
+    idLabel: "Team slug or ID",
+    idHelp:  "Shared — your Vercel team slug appears in the dashboard URL (e.g. dan-platos-projects). If the client has their own Vercel account, use their team slug instead.",
+    keyLabel: "API token",
+    keyHelp:  "Shared across clients — one token covers all teams under your Vercel account. Create at vercel.com/account/tokens. If the client has their own Vercel account, use their token.",
+    keyPlaceholder: "vercel_...",
+  },
+  {
+    value:   "supabase",
+    label:   "Supabase",
+    idLabel: "Project ref",
+    idHelp:  "Per-client — each Supabase project has a unique ref. Found in the Supabase dashboard → Project Settings → General (e.g. zzeidumlgcvp...).",
+    keyLabel: "Personal Access Token (PAT)",
+    keyHelp:  "Shared across clients — one PAT covers all projects under your Supabase account. Must be a PAT (sbp_...), not a project service_role key. Create at supabase.com/dashboard/account/tokens.",
+    keyPlaceholder: "sbp_...",
+  },
+  {
+    value:   "other",
+    label:   "Other",
+    idLabel: "Account ID",
+    idHelp:  "The identifier used to pull billing data for this provider.",
+    keyLabel: "API key",
+    keyHelp:  "The API key or token used to authenticate with this provider.",
+    keyPlaceholder: "API key…",
+  },
 ];
 
 export default function NewApiConfigPage() {
@@ -102,19 +134,19 @@ export default function NewApiConfigPage() {
             type="text"
             value={externalId}
             onChange={e => setExternalId(e.target.value)}
-            placeholder="e.g. org_abc123"
+            placeholder="e.g. wrkspc_01… / dan-platos-projects / zzeiduml…"
             required
             className={inputCls}
           />
         </Field>
 
-        <Field label="API key" hint="Stored encrypted in Supabase Vault. Leave blank to add later.">
+        <Field label={providerMeta.keyLabel} hint={`${providerMeta.keyHelp} Stored encrypted in Supabase Vault. Leave blank to add later.`}>
           <div className="relative">
             <input
               type={showKey ? "text" : "password"}
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
-              placeholder="sk-ant-… / vercel_… / sbp_…"
+              placeholder={providerMeta.keyPlaceholder}
               className={`${inputCls} pr-10 font-mono`}
               autoComplete="off"
             />
