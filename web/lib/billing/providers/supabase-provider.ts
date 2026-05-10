@@ -29,6 +29,15 @@ export async function pullSupabaseBilling(
 
   if (!res.ok) {
     const body = await res.text();
+    // 401 usually means a service_role JWT was stored instead of a PAT.
+    // The Supabase Management API requires a Personal Access Token from
+    // supabase.com/dashboard/account/tokens, not a project service_role key.
+    if (res.status === 401) {
+      throw new Error(
+        `Supabase usage API 401: credential must be a Personal Access Token (PAT) ` +
+        `from supabase.com/dashboard/account/tokens, not a service_role key. Original: ${body}`
+      );
+    }
     throw new Error(`Supabase usage API ${res.status}: ${body}`);
   }
 
