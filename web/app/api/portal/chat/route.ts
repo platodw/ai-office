@@ -23,12 +23,11 @@ export async function POST(request: Request) {
     .single();
   if (!client) return NextResponse.json({ error: "client not found" }, { status: 404 });
 
-  // Use the shared inference key. The per-client client_api_configs rows are
-  // for billing-side workspace IDs (admin keys), not Messages-API inference
-  // keys, so we don't try to use them here. When per-client inference keys
-  // become useful, add a 'purpose' column and pick the support one.
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
+  // Dedicated support inference key (ai-office-support) so chat traffic is
+  // billed separately on Anthropic's side. Falls back to the shared key
+  // for local dev / preview environments where SUPPORT isn't set.
+  const apiKey = process.env.ANTHROPIC_API_KEY_SUPPORT ?? process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: "no Anthropic key configured" }, { status: 500 });
 
   // Find or create the conversation.
   let conversationId: string;
