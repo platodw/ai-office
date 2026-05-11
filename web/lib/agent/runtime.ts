@@ -41,7 +41,8 @@ Rules:
 - Search the knowledge base for generic "how do I" or setup questions.
 - For state-changing requests, call the appropriate action tool. Tell the user "I've flagged this for the Support team — they'll review and follow up." Don't pretend the action is already done.
 - If the user is upset or stuck and the situation is beyond what the tools cover, call escalate_to_admin with a summary.
-- Keep replies short. Long answers should be paragraphs, not headers and bullet lists.`;
+- Keep replies short. Long answers should be paragraphs, not headers and bullet lists.
+- Do not use markdown formatting in replies. No **bold**, no *italics*, no \`code spans\`, no headers, no bullet lists. Write plain prose. The chat panel renders text literally, so markdown characters show up as junk.`;
 
 export type ChatTurn = {
   role: "user" | "assistant";
@@ -125,8 +126,11 @@ export async function runTurn(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
     );
 
+    // Iterations where the model only called a tool (no user-visible text)
+    // get persisted as role='tool' so the chat UI skips them — only real
+    // assistant text gets bubbles. Token cost still recorded for accounting.
     records.push({
-      role: "assistant",
+      role: text ? "assistant" : "tool",
       content: text,
       tool_calls: toolUses.length ? toolUses : undefined,
       input_tokens: inputTokens,

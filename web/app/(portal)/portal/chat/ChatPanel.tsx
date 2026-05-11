@@ -82,7 +82,7 @@ export default function ChatPanel({
             Start a conversation. Ask about your setup, your deployed apps, or anything else.
           </div>
         )}
-        {messages.map((m) => (
+        {messages.filter((m) => m.content && m.content.trim().length > 0).map((m) => (
           <Bubble key={m.id} role={m.author_type} content={m.content} />
         ))}
         {sending && (
