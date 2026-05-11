@@ -4,6 +4,7 @@ import Link from "next/link";
 import PortalUsersPanel from "./PortalUsersPanel";
 import ClientStatusSelect from "./ClientStatusSelect";
 import DeployedAppsSection from "./DeployedAppsSection";
+import KbSeedButton from "./KbSeedButton";
 
 export default async function AdminClientDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +20,7 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
     { data: tickets },
     { data: portalUsers },
     { data: apps },
+    { count: seededKbCount },
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("id", id).single(),
     supabase.from("client_contacts").select("*").eq("client_id", id).order("is_primary", { ascending: false }),
@@ -29,6 +31,7 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
     supabase.from("support_tickets").select("id, title, status, priority, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(5),
     supabase.from("client_users").select("id, user_id, portal_role, created_at, profiles(name, email)").eq("client_id", id).order("created_at"),
     supabase.from("client_apps").select("id, name, status, production_url, staging_url, repo_url, hosting, tech_stack, launched_at").eq("client_id", id).order("created_at"),
+    supabase.from("kb_articles").select("id", { count: "exact", head: true }).eq("client_id", id).eq("source", "seeded"),
   ]);
 
   if (!client) notFound();
@@ -203,6 +206,11 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
         {/* Portal users */}
         <div className="col-span-2 bg-surface-2 border border-border rounded-xl p-5">
           <PortalUsersPanel clientId={id} initial={(portalUsers ?? []) as unknown as Parameters<typeof PortalUsersPanel>[0]["initial"]} />
+        </div>
+
+        {/* Knowledge base seeding */}
+        <div className="col-span-2 bg-surface-2 border border-border rounded-xl p-5">
+          <KbSeedButton clientId={id} articleCount={seededKbCount ?? 0} />
         </div>
 
         {/* Transfer / offboarding */}
