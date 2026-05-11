@@ -35,7 +35,7 @@ export async function POST(_request: Request, { params }: Params) {
   ] = await Promise.all([
     supabase.from("clients").select("name, status, website, notes, onboarded_at, github_org").eq("id", clientId).single(),
     supabase.from("client_contacts").select("name, role, email, phone, is_primary").eq("client_id", clientId),
-    supabase.from("client_apps").select("name, description, status, production_url, staging_url, repo_url, hosting, tech_stack, launched_at").eq("client_id", clientId),
+    supabase.from("client_apps").select("name, notes, status, production_url, staging_url, repo_url, hosting, tech_stack, launched_at").eq("client_id", clientId),
     supabase.from("client_services").select("name, type, amount_cents, billing_start, billing_end, status").eq("client_id", clientId),
     supabase.from("client_api_configs").select("provider, display_name, external_id, is_active").eq("client_id", clientId),
     supabase.from("client_tech_info").select("domain_registrar, dns_provider, hosting_provider, it_service_provider, notes").eq("client_id", clientId).maybeSingle(),

@@ -14,7 +14,7 @@ export const listAppsTool = {
 export async function runListApps(supabase: SupabaseClient, clientId: string) {
   const { data, error } = await supabase
     .from("client_apps")
-    .select("id, name, description, status, production_url, staging_url, repo_url, hosting, tech_stack, launched_at")
+    .select("id, name, notes, status, production_url, staging_url, repo_url, hosting, tech_stack, launched_at")
     .eq("client_id", clientId)
     .order("launched_at", { ascending: false, nullsFirst: false });
   if (error) return { error: error.message, apps: [] };
