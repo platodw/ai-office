@@ -11,11 +11,14 @@ export default async function PortalChatPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
+  // Show every conversation this client has — both casual chats and
+  // chats that have been escalated to a ticket — so users can pick
+  // up where they left off regardless of whether the agent escalated.
   const { data: conversations } = await supabase
     .from("support_tickets")
     .select("id, title, status, updated_at, created_at")
     .eq("client_id", clientId)
-    .eq("kind", "chat")
+    .in("kind", ["chat", "ticket"])
     .order("updated_at", { ascending: false })
     .limit(30);
 

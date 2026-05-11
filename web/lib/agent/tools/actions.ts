@@ -66,9 +66,12 @@ export async function runEscalateToAdmin(
     payload:         {},
   });
   if (error) return { ok: false, error: error.message };
+  // Promote the chat to a real ticket so it appears in /portal/support
+  // and /admin/support alongside other tickets. The title also becomes
+  // the user's-facing issue summary instead of the first chat message.
   await ctx.supabase
     .from("support_tickets")
-    .update({ status: "waiting_on_dan" })
+    .update({ status: "waiting_on_dan", kind: "ticket", title: input.title })
     .eq("id", ctx.conversationId);
   await pingTelegram(ctx.supabase, ctx.clientId, "action", "escalate_to_admin", input.title, input.description);
   return { ok: true, status: "pending", message: "Flagged for the Support team. They'll review and follow up." };
@@ -94,7 +97,7 @@ export async function runProposeCreatePortalUser(
   if (error) return { ok: false, error: error.message };
   await ctx.supabase
     .from("support_tickets")
-    .update({ status: "awaiting_approval" })
+    .update({ status: "awaiting_approval", kind: "ticket", title })
     .eq("id", ctx.conversationId);
   await pingTelegram(ctx.supabase, ctx.clientId, "action", "create_portal_user", title, `Role: ${input.role}`);
   return { ok: true, status: "pending", message: `Submitted ${input.email} for approval.` };
