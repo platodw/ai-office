@@ -73,9 +73,12 @@ export async function notifyDanNewApproval(params: {
     });
     if (!res.ok) {
       const body = await res.text();
-      console.warn(`[notify] Telegram approval ping failed: ${res.status} ${body.slice(0, 200)}`);
+      // Split into two short lines so the status code stays in the truncated
+      // Vercel log view; the body is on its own line.
+      console.warn(`[notify] tg status ${res.status}`);
+      console.warn(`[notify] tg body ${body.slice(0, 300)}`);
     } else {
-      console.log(`[notify] Telegram approval ping sent for ${params.clientName} / ${params.toolName}`);
+      console.log(`[notify] tg ok ${params.toolName}`);
     }
   } catch (err) {
     console.warn(`[notify] Telegram approval ping threw: ${err instanceof Error ? err.message : String(err)}`);
