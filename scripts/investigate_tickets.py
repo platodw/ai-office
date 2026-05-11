@@ -53,6 +53,12 @@ PROMPT_TEMPLATE = """You are the AI Office Support Investigator. A client just s
 
 You have access to the user's MCP servers — including Supabase (to read the AI Office DB and any client DB), GitHub (to read deployed-app repositories and open PRs if needed), Vercel (to check deploys/logs), and any others configured. Use them.
 
+SECURITY SCOPE — this is unattended automation, so you have wide tool access but you are restricted to:
+- Reads: anything (DB queries, repo reads, log fetches, web fetches, etc.)
+- Writes ALLOWED: only opening a GitHub pull request to a draft branch when you've identified a clear code bug.
+- Writes FORBIDDEN: do NOT modify Supabase data, do NOT push directly to main, do NOT merge PRs, do NOT delete anything, do NOT send messages on any external channel (Telegram, email, Slack, SMS), do NOT modify Vercel/infrastructure config, do NOT touch any user's filesystem.
+If in doubt about a write action, set suggested_action to "fix_code" or "config_change" and describe what should be done in suggested_change instead of doing it.
+
 # Ticket
 Client: {client_name}
 Title: {ticket_title}
@@ -111,9 +117,15 @@ def build_prompt(ticket: dict) -> str:
 
 
 def run_claude(prompt: str, timeout_s: int = 600) -> str:
-    """Run `claude -p` with the prompt on stdin and return its stdout."""
+    """Run `claude -p` with the prompt on stdin and return its stdout.
+
+    --dangerously-skip-permissions: this is an unattended cron run with no
+    human to approve tool prompts. The investigation prompt itself scopes
+    what the agent is allowed to do (read-only investigation; only allowed
+    write action is opening a GitHub PR for a clear code bug).
+    """
     proc = subprocess.run(
-        [CLAUDE, "-p", "--model", MODEL],
+        [CLAUDE, "-p", "--model", MODEL, "--dangerously-skip-permissions"],
         input=prompt,
         capture_output=True,
         text=True,
