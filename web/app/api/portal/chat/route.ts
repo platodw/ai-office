@@ -107,11 +107,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `persist failed: ${insertErr.message}` }, { status: 500 });
   }
 
-  // Bump the ticket's status so the list view shows recent activity.
-  await admin
+  // Bump status to ai_answered ONLY if the agent didn't escalate this turn.
+  // Action tools set status to waiting_on_dan / awaiting_approval; don't
+  // clobber those — otherwise the investigator never sees escalated tickets.
+  const { data: currentTicket } = await admin
     .from("support_tickets")
-    .update({ status: "ai_answered", updated_at: new Date().toISOString() })
-    .eq("id", conversationId);
+    .select("status")
+    .eq("id", conversationId)
+    .single();
+  const escalatedStatuses = ["waiting_on_dan", "awaiting_approval"];
+  if (currentTicket && !escalatedStatuses.includes(currentTicket.status)) {
+    await admin
+      .from("support_tickets")
+      .update({ status: "ai_answered", updated_at: new Date().toISOString() })
+      .eq("id", conversationId);
+  } else {
+    await admin
+      .from("support_tickets")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", conversationId);
+  }
 
   return NextResponse.json({
     conversation_id: conversationId,
