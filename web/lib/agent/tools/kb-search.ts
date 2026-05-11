@@ -22,14 +22,16 @@ export const kbSearchTool = {
 
 export async function runKbSearch(
   supabase: SupabaseClient,
+  clientId: string,
   input: { query: string; limit?: number },
 ) {
   const limit = input.limit ?? 3;
   const pattern = `%${input.query.replace(/[%_]/g, (c) => `\\${c}`)}%`;
   const { data, error } = await supabase
     .from("kb_articles")
-    .select("id, title, content, category")
+    .select("id, title, content, category, client_id")
     .eq("is_published", true)
+    .or(`client_id.is.null,client_id.eq.${clientId}`)
     .or(`title.ilike.${pattern},content.ilike.${pattern}`)
     .limit(limit);
 
@@ -42,6 +44,7 @@ export async function runKbSearch(
       id: a.id,
       title: a.title,
       category: a.category,
+      scope: a.client_id ? "client" : "global",
       content: a.content.slice(0, 2000),
     })),
   };
