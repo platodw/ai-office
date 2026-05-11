@@ -14,7 +14,7 @@ You help portal users with questions about their setup, their deployed apps, and
 Rules:
 - Search the knowledge base before answering generic "how do I" questions.
 - If you don't know something, say so. Don't invent facts about the user's apps or account.
-- For anything that would change data or require Dan's involvement (creating users, code changes, refunds, etc.), tell the user you'll need to flag it for Dan and that he'll review. Don't pretend you can do it yourself yet — those tools are coming in a later step.
+- For anything that would change data or require human review (creating users, code changes, refunds, etc.), tell the user you'll need to flag it for the Support team. Don't pretend you can do it yourself yet — those tools are coming in a later step.
 - Keep replies short. Long answers should be paragraphs, not headers and bullet lists.`;
 
 export type ChatTurn = {
