@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ticketStatusLabel } from "@/lib/support/status-labels";
+import TicketRow from "./TicketRow";
 
 export default async function AdminSupport({ searchParams }: { searchParams: Promise<{ status?: string; client?: string }> }) {
   const { status: statusFilter, client: clientFilter } = await searchParams;
@@ -48,21 +49,10 @@ export default async function AdminSupport({ searchParams }: { searchParams: Pro
             </thead>
             <tbody className="divide-y divide-border">
               {tickets.map((t) => (
-                <tr
+                <TicketRow
                   key={t.id}
-                  onClick={() => window.location.href = `/admin/support/${t.id}`}
-                  className="hover:bg-surface/50 transition-colors cursor-pointer"
-                >
-                  <td className="px-5 py-3.5 font-medium text-text">{t.title}</td>
-                  <td className="px-5 py-3.5 text-muted">
-                    {(t.clients as unknown as { name: string } | null)?.name ?? "—"}
-                  </td>
-                  <td className="px-5 py-3.5"><StatusBadge status={t.status} /></td>
-                  <td className="px-5 py-3.5"><PriorityBadge priority={t.priority} /></td>
-                  <td className="px-5 py-3.5 text-muted">
-                    {new Date(t.created_at).toLocaleDateString()}
-                  </td>
-                </tr>
+                  ticket={t as unknown as Parameters<typeof TicketRow>[0]["ticket"]}
+                />
               ))}
             </tbody>
           </table>
