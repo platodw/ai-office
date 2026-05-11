@@ -28,7 +28,7 @@ export default async function AdminSupport({ searchParams }: { searchParams: Pro
       <div className="flex gap-1 mb-6">
         <FilterTab href="/admin/support" label="Active" active={!statusFilter} />
         {statuses.map((s) => (
-          <FilterTab key={s} href={`/admin/support?status=${s}`} label={s.replace(/_/g, " ")} active={statusFilter === s} />
+          <FilterTab key={s} href={`/admin/support?status=${s}`} label={ticketStatusLabel(s)} active={statusFilter === s} />
         ))}
       </div>
 
@@ -76,7 +76,7 @@ function FilterTab({ href, label, active }: { href: string; label: string; activ
   return (
     <a
       href={href}
-      className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors capitalize ${
+      className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
         active ? "bg-text text-bg" : "text-muted hover:text-text hover:bg-surface"
       }`}
     >
