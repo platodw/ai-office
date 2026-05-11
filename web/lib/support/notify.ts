@@ -9,7 +9,10 @@ export async function notifyDanNewTicket(params: {
 }): Promise<void> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId   = process.env.TELEGRAM_CHAT_ID;
-  if (!botToken || !chatId) return; // silently skip if not configured
+  if (!botToken || !chatId) {
+    console.warn("[notify] Telegram env vars missing — skipping ping. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.");
+    return;
+  } // silently skip if not configured
 
   const preview = params.body.slice(0, 300) + (params.body.length > 300 ? "..." : "");
   const adminUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/admin/support/${params.ticketId}`;
@@ -45,7 +48,10 @@ export async function notifyDanNewApproval(params: {
 }): Promise<void> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId   = process.env.TELEGRAM_CHAT_ID;
-  if (!botToken || !chatId) return;
+  if (!botToken || !chatId) {
+    console.warn("[notify] Telegram env vars missing — skipping ping. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.");
+    return;
+  }
 
   const adminUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/admin/support/approvals`;
   const text = [
@@ -59,9 +65,19 @@ export async function notifyDanNewApproval(params: {
     `[Review queue](${adminUrl})`,
   ].filter(Boolean).join("\n");
 
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
-  });
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[notify] Telegram approval ping failed: ${res.status} ${body.slice(0, 200)}`);
+    } else {
+      console.log(`[notify] Telegram approval ping sent for ${params.clientName} / ${params.toolName}`);
+    }
+  } catch (err) {
+    console.warn(`[notify] Telegram approval ping threw: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
