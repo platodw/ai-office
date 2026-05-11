@@ -22,7 +22,10 @@ export default async function PortalChatPage({
     .order("updated_at", { ascending: false })
     .limit(30);
 
-  const activeId = sp.c ?? conversations?.[0]?.id ?? null;
+  // Default to a fresh new-chat panel. The sidebar links open specific
+  // conversations via ?c=<id>; landing on /portal/chat with no param is
+  // explicitly "start a new chat".
+  const activeId = sp.c ?? null;
 
   let initialMessages: { id: string; author_type: string; content: string; created_at: string }[] = [];
   if (activeId) {
