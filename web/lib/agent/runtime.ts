@@ -8,6 +8,10 @@ import {
   recentInvoicesTool,  runRecentInvoices,
   accountOverviewTool, runAccountOverview,
 } from "./tools/client-data";
+import {
+  escalateToAdminTool,         runEscalateToAdmin,
+  proposeCreatePortalUserTool, runProposeCreatePortalUser,
+} from "./tools/actions";
 
 // Pricing per 1M tokens (USD). Keep this aligned with the model we use.
 const MODEL = "claude-opus-4-7";
@@ -26,10 +30,15 @@ You have these read tools for live data about this client:
 - recent_invoices: recent billing
 - kb_search: per-client and global help articles
 
+For state-changing requests, you have these action tools. They never execute directly — they submit a request to the Support team for approval:
+- propose_create_portal_user: when the user asks to invite a teammate / give someone portal access
+- escalate_to_admin: when the user has an issue you can't resolve, a complaint, or asks for a human
+
 Rules:
 - Use the read tools instead of guessing. If a fact lives in those tools, call them.
 - Search the knowledge base for generic "how do I" or setup questions.
-- For anything that would change data or require human review (creating users, code changes, refunds, etc.), tell the user you'll need to flag it for the Support team. Don't pretend you can do it yourself yet — those tools are coming in a later step.
+- For state-changing requests, call the appropriate action tool. Tell the user "I've flagged this for the Support team — they'll review and follow up." Don't pretend the action is already done.
+- If the user is upset or stuck and the situation is beyond what the tools cover, call escalate_to_admin with a summary.
 - Keep replies short. Long answers should be paragraphs, not headers and bullet lists.`;
 
 export type ChatTurn = {
@@ -41,6 +50,7 @@ export type AgentContext = {
   supabase: SupabaseClient;
   clientId: string;
   clientName: string;
+  conversationId: string;
   apiKey: string;
 };
 
@@ -62,6 +72,8 @@ const TOOLS = [
   listServicesTool,
   recentInvoicesTool,
   accountOverviewTool,
+  escalateToAdminTool,
+  proposeCreatePortalUserTool,
 ] as const;
 
 export async function runTurn(
@@ -151,14 +163,17 @@ export async function runTurn(
 }
 
 async function dispatchTool(ctx: AgentContext, name: string, input: unknown): Promise<unknown> {
-  const { supabase, clientId } = ctx;
+  const { supabase, clientId, conversationId } = ctx;
+  const approvalCtx = { supabase, clientId, conversationId };
   switch (name) {
-    case "kb_search":          return runKbSearch(supabase, clientId, input as { query: string; limit?: number });
-    case "list_apps":          return runListApps(supabase, clientId);
-    case "list_contacts":      return runListContacts(supabase, clientId);
-    case "list_services":      return runListServices(supabase, clientId);
-    case "recent_invoices":    return runRecentInvoices(supabase, clientId);
-    case "account_overview":   return runAccountOverview(supabase, clientId);
-    default:                   return { error: `Unknown tool: ${name}` };
+    case "kb_search":                   return runKbSearch(supabase, clientId, input as { query: string; limit?: number });
+    case "list_apps":                   return runListApps(supabase, clientId);
+    case "list_contacts":               return runListContacts(supabase, clientId);
+    case "list_services":               return runListServices(supabase, clientId);
+    case "recent_invoices":             return runRecentInvoices(supabase, clientId);
+    case "account_overview":            return runAccountOverview(supabase, clientId);
+    case "escalate_to_admin":           return runEscalateToAdmin(approvalCtx, input as { title: string; description: string });
+    case "propose_create_portal_user":  return runProposeCreatePortalUser(approvalCtx, input as { email: string; name?: string; role: "power_user" | "billing" | "viewer" });
+    default:                            return { error: `Unknown tool: ${name}` };
   }
 }

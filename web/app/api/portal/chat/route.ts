@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   let result;
   try {
     result = await runTurn(
-      { supabase: admin, clientId, clientName: client.name, apiKey },
+      { supabase: admin, clientId, clientName: client.name, conversationId, apiKey },
       history,
       message,
     );
