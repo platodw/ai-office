@@ -39,18 +39,24 @@ export async function notifyDanNewTicket(params: {
   });
 }
 
+export type NotifyDiagnosis =
+  | { state: "missing_env"; details: string }
+  | { state: "ok"; httpStatus: number }
+  | { state: "tg_failed"; httpStatus: number; body: string }
+  | { state: "threw"; message: string };
+
 export async function notifyDanNewApproval(params: {
   clientName: string;
   kind:       "action" | "code_change";
   toolName:   string;
   title:      string;
   description: string | null;
-}): Promise<void> {
+}): Promise<NotifyDiagnosis> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId   = process.env.TELEGRAM_CHAT_ID;
   if (!botToken || !chatId) {
     console.warn("[notify] Telegram env vars missing — skipping ping. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.");
-    return;
+    return { state: "missing_env", details: `botToken=${!!botToken} chatId=${!!chatId}` };
   }
 
   const adminUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/admin/support/approvals`;
@@ -73,14 +79,15 @@ export async function notifyDanNewApproval(params: {
     });
     if (!res.ok) {
       const body = await res.text();
-      // Split into two short lines so the status code stays in the truncated
-      // Vercel log view; the body is on its own line.
       console.warn(`[notify] tg status ${res.status}`);
       console.warn(`[notify] tg body ${body.slice(0, 300)}`);
-    } else {
-      console.log(`[notify] tg ok ${params.toolName}`);
+      return { state: "tg_failed", httpStatus: res.status, body: body.slice(0, 500) };
     }
+    console.log(`[notify] tg ok ${params.toolName}`);
+    return { state: "ok", httpStatus: res.status };
   } catch (err) {
-    console.warn(`[notify] Telegram approval ping threw: ${err instanceof Error ? err.message : String(err)}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[notify] Telegram approval ping threw: ${msg}`);
+    return { state: "threw", message: msg };
   }
 }

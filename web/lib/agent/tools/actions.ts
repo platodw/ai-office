@@ -3,7 +3,7 @@ import { notifyDanNewApproval } from "@/lib/support/notify";
 
 async function pingTelegram(supabase: SupabaseClient, clientId: string, kind: "action" | "code_change", toolName: string, title: string, description: string | null) {
   const { data: client } = await supabase.from("clients").select("name").eq("id", clientId).single();
-  await notifyDanNewApproval({
+  return notifyDanNewApproval({
     clientName: client?.name ?? "Unknown",
     kind,
     toolName,
@@ -56,7 +56,7 @@ export async function runEscalateToAdmin(
   ctx: ApprovalContext,
   input: { title: string; description: string },
 ) {
-  const { error } = await ctx.supabase.from("support_approvals").insert({
+  const { data: inserted, error } = await ctx.supabase.from("support_approvals").insert({
     conversation_id: ctx.conversationId,
     client_id:       ctx.clientId,
     kind:            "action",
@@ -64,16 +64,15 @@ export async function runEscalateToAdmin(
     title:           input.title,
     description:     input.description,
     payload:         {},
-  });
-  if (error) return { ok: false, error: error.message };
-  // Promote the chat to a real ticket so it appears in /portal/support
-  // and /admin/support alongside other tickets. The title also becomes
-  // the user's-facing issue summary instead of the first chat message.
+  }).select("id").single();
+  if (error || !inserted) return { ok: false, error: error?.message ?? "insert failed" };
   await ctx.supabase
     .from("support_tickets")
     .update({ status: "waiting_on_dan", kind: "ticket", title: input.title })
     .eq("id", ctx.conversationId);
-  await pingTelegram(ctx.supabase, ctx.clientId, "action", "escalate_to_admin", input.title, input.description);
+  const tgResult = await pingTelegram(ctx.supabase, ctx.clientId, "action", "escalate_to_admin", input.title, input.description);
+  // Stash the telegram diagnosis on the approval row so we can debug via DB.
+  await ctx.supabase.from("support_approvals").update({ result: { telegram: tgResult } }).eq("id", inserted.id);
   return { ok: true, status: "pending", message: "Flagged for the Support team. They'll review and follow up." };
 }
 
@@ -85,7 +84,7 @@ export async function runProposeCreatePortalUser(
     return { ok: false, error: "invalid email" };
   }
   const title = `Add portal user ${input.email}`;
-  const { error } = await ctx.supabase.from("support_approvals").insert({
+  const { data: inserted, error } = await ctx.supabase.from("support_approvals").insert({
     conversation_id: ctx.conversationId,
     client_id:       ctx.clientId,
     kind:            "action",
@@ -93,13 +92,14 @@ export async function runProposeCreatePortalUser(
     title,
     description:     `Add ${input.name ?? input.email} as a ${input.role}.`,
     payload:         { email: input.email, name: input.name ?? null, role: input.role },
-  });
-  if (error) return { ok: false, error: error.message };
+  }).select("id").single();
+  if (error || !inserted) return { ok: false, error: error?.message ?? "insert failed" };
   await ctx.supabase
     .from("support_tickets")
     .update({ status: "awaiting_approval", kind: "ticket", title })
     .eq("id", ctx.conversationId);
-  await pingTelegram(ctx.supabase, ctx.clientId, "action", "create_portal_user", title, `Role: ${input.role}`);
+  const tgResult = await pingTelegram(ctx.supabase, ctx.clientId, "action", "create_portal_user", title, `Role: ${input.role}`);
+  await ctx.supabase.from("support_approvals").update({ result: { telegram: tgResult } }).eq("id", inserted.id);
   return { ok: true, status: "pending", message: `Submitted ${input.email} for approval.` };
 }
 
