@@ -70,7 +70,7 @@ export default function AdminLoginPage() {
 
         <p className="text-center text-xs text-muted mt-6">
           <a href="mailto:dan@danplato.com" className="hover:text-text transition-colors">
-            Need access? Contact Dan
+            Need access? Contact the Support team
           </a>
         </p>
       </div>

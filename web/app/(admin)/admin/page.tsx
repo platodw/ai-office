@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { ticketStatusLabel } from "@/lib/support/status-labels";
 
 export default async function AdminOverview() {
   const supabase = await createClient();
@@ -126,7 +127,7 @@ function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLES[status] ?? "bg-surface text-muted";
   return (
     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${style}`}>
-      {status.replace(/_/g, " ")}
+      {ticketStatusLabel(status)}
     </span>
   );
 }

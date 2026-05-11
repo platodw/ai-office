@@ -74,7 +74,7 @@ Your answer in markdown.
 <confidence>HIGH or LOW</confidence>
 
 Use HIGH when the KB directly answers the question.
-Use LOW when the question requires account-specific details, billing information, or Dan's direct involvement.`;
+Use LOW when the question requires account-specific details, billing information, or the Support team's direct involvement.`;
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",

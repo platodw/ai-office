@@ -2,6 +2,7 @@ import { requireClientUser }   from "@/lib/auth";
 import { createClient }        from "@/lib/supabase/server";
 import { notFound, redirect }  from "next/navigation";
 import TicketThread            from "./TicketThread";
+import { ticketStatusLabel }   from "@/lib/support/status-labels";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -58,8 +59,8 @@ const STATUS_STYLES: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full capitalize whitespace-nowrap ${STATUS_STYLES[status] ?? "bg-surface text-muted"}`}>
-      {status.replace(/_/g, " ")}
+    <span className={`shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${STATUS_STYLES[status] ?? "bg-surface text-muted"}`}>
+      {ticketStatusLabel(status)}
     </span>
   );
 }

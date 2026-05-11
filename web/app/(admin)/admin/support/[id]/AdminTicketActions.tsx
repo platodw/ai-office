@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 const STATUS_OPTIONS = [
   { value: "open",           label: "Open" },
-  { value: "waiting_on_dan", label: "Waiting on me" },
+  { value: "waiting_on_dan", label: "Waiting on Support" },
   { value: "ai_answered",    label: "AI answered" },
   { value: "resolved",       label: "Resolved" },
   { value: "closed",         label: "Closed" },

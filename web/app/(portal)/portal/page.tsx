@@ -1,5 +1,6 @@
 import { requireClientUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { ticketStatusLabel } from "@/lib/support/status-labels";
 
 export default async function PortalHome() {
   const { clientId } = await requireClientUser();
@@ -69,7 +70,7 @@ export default async function PortalHome() {
               {tickets.map((t) => (
                 <li key={t.id} className="flex items-center justify-between py-1">
                   <span className="text-sm text-text">{t.title}</span>
-                  <span className="text-[10px] font-semibold text-muted capitalize">{t.status.replace(/_/g, " ")}</span>
+                  <span className="text-[10px] font-semibold text-muted">{ticketStatusLabel(t.status)}</span>
                 </li>
               ))}
             </ul>

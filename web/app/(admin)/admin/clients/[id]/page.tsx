@@ -5,6 +5,7 @@ import PortalUsersPanel from "./PortalUsersPanel";
 import ClientStatusSelect from "./ClientStatusSelect";
 import DeployedAppsSection from "./DeployedAppsSection";
 import KbSeedButton from "./KbSeedButton";
+import { ticketStatusLabel } from "@/lib/support/status-labels";
 
 export default async function AdminClientDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -284,5 +285,5 @@ const TICKET_STATUS: Record<string, string> = {
   waiting_on_dan: "bg-error/10 text-error", resolved: "bg-success/10 text-success", closed: "bg-surface text-muted",
 };
 function TicketStatusBadge({ status }: { status: string }) {
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TICKET_STATUS[status] ?? "bg-surface text-muted"}`}>{status.replace(/_/g, " ")}</span>;
+  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TICKET_STATUS[status] ?? "bg-surface text-muted"}`}>{ticketStatusLabel(status)}</span>;
 }

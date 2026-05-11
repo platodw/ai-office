@@ -1,6 +1,7 @@
 import { requireClientUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { ticketStatusLabel } from "@/lib/support/status-labels";
 
 export default async function PortalSupport() {
   const { clientId } = await requireClientUser();
@@ -91,8 +92,8 @@ const STATUS_STYLES: Record<string, string> = {
 };
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[status] ?? "bg-surface text-muted"}`}>
-      {status.replace(/_/g, " ")}
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLES[status] ?? "bg-surface text-muted"}`}>
+      {ticketStatusLabel(status)}
     </span>
   );
 }
