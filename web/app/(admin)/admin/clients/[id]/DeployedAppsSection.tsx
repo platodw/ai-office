@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import ImportAppsButton from "./apps/ImportAppsButton";
+import AppAccessManager from "./AppAccessManager";
 
 type App = {
   id: string;
@@ -12,6 +13,7 @@ type App = {
   hosting: string | null;
   tech_stack: string | null;
   launched_at: string | null;
+  supabase_project_ref: string | null;
 };
 
 const APP_STATUS: Record<string, string> = {
@@ -31,6 +33,7 @@ export default function DeployedAppsSection({
   initial: App[];
 }) {
   const [apps, setApps] = useState(initial);
+  const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
 
   async function refresh() {
     const res = await fetch(`/api/admin/clients/${clientId}/apps`);
@@ -56,7 +59,7 @@ export default function DeployedAppsSection({
         <p className="text-sm text-muted">
           No apps yet.{" "}
           <a href={`/admin/clients/${clientId}/apps/new`} className="text-primary-dark hover:underline">Add one manually</a>
-          {" "}or use "Import from GitHub" above.
+          {" "}or use &ldquo;Import from GitHub&rdquo; above.
         </p>
       ) : (
         <div className="border border-border rounded-xl overflow-hidden">
@@ -72,32 +75,49 @@ export default function DeployedAppsSection({
             </thead>
             <tbody>
               {apps.map(app => (
-                <tr key={app.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-text">{app.name}</div>
-                    {app.launched_at && (
-                      <div className="text-xs text-muted">
-                        Launched {new Date(app.launched_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                <React.Fragment key={app.id}>
+                  <tr className="border-b border-border last:border-0">
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-text">{app.name}</div>
+                      {app.launched_at && (
+                        <div className="text-xs text-muted">
+                          Launched {new Date(app.launched_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-muted text-xs">{app.tech_stack ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted text-xs">{app.hosting ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-3">
+                        {app.production_url && <a href={app.production_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-dark hover:underline">Production</a>}
+                        {app.staging_url    && <a href={app.staging_url}    target="_blank" rel="noopener noreferrer" className="text-xs text-muted hover:text-text">Staging</a>}
+                        {app.repo_url       && <a href={app.repo_url}       target="_blank" rel="noopener noreferrer" className="text-xs text-muted hover:text-text">Repo</a>}
+                        {!app.production_url && !app.staging_url && !app.repo_url && <span className="text-xs text-muted">—</span>}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-muted text-xs">{app.tech_stack ?? "—"}</td>
-                  <td className="px-4 py-3 text-muted text-xs">{app.hosting ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-3">
-                      {app.production_url && <a href={app.production_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-dark hover:underline">Production</a>}
-                      {app.staging_url    && <a href={app.staging_url}    target="_blank" rel="noopener noreferrer" className="text-xs text-muted hover:text-text">Staging</a>}
-                      {app.repo_url       && <a href={app.repo_url}       target="_blank" rel="noopener noreferrer" className="text-xs text-muted hover:text-text">Repo</a>}
-                      {!app.production_url && !app.staging_url && !app.repo_url && <span className="text-xs text-muted">—</span>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${APP_STATUS[app.status] ?? "bg-surface text-muted"}`}>
-                      {app.status}
-                    </span>
-                    <a href={`/admin/clients/${clientId}/apps/${app.id}/edit`} className="text-xs text-muted hover:text-text ml-3">Edit</a>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${APP_STATUS[app.status] ?? "bg-surface text-muted"}`}>
+                        {app.status}
+                      </span>
+                      {app.supabase_project_ref && (
+                        <button
+                          onClick={() => setExpandedAppId(expandedAppId === app.id ? null : app.id)}
+                          className="text-xs text-primary-dark hover:underline ml-3"
+                        >
+                          {expandedAppId === app.id ? "Hide users" : "Users"}
+                        </button>
+                      )}
+                      <a href={`/admin/clients/${clientId}/apps/${app.id}/edit`} className="text-xs text-muted hover:text-text ml-3">Edit</a>
+                    </td>
+                  </tr>
+                  {expandedAppId === app.id && app.supabase_project_ref && (
+                    <tr className="border-b border-border last:border-0 bg-surface/50">
+                      <td colSpan={5} className="px-4 pb-4">
+                        <AppAccessManager clientId={clientId} appId={app.id} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>

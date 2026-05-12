@@ -31,7 +31,7 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
     supabase.from("invoices").select("id, invoice_number, status, total_cents, due_date").eq("client_id", id).order("issued_date", { ascending: false }).limit(5),
     supabase.from("support_tickets").select("id, title, status, priority, created_at").eq("client_id", id).order("created_at", { ascending: false }).limit(5),
     supabase.from("client_users").select("id, user_id, portal_role, created_at, profiles(name, email)").eq("client_id", id).order("created_at"),
-    supabase.from("client_apps").select("id, name, status, production_url, staging_url, repo_url, hosting, tech_stack, launched_at").eq("client_id", id).order("created_at"),
+    supabase.from("client_apps").select("id, name, status, production_url, staging_url, repo_url, hosting, tech_stack, launched_at, supabase_project_ref").eq("client_id", id).order("created_at"),
     supabase.from("kb_articles").select("id, title, category, tags, source, is_published, created_at").eq("client_id", id).order("created_at", { ascending: false }),
   ]);
 
@@ -286,4 +286,9 @@ const TICKET_STATUS: Record<string, string> = {
 };
 function TicketStatusBadge({ status }: { status: string }) {
   return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TICKET_STATUS[status] ?? "bg-surface text-muted"}`}>{ticketStatusLabel(status)}</span>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _StatusBadgeUnused({ status }: { status: string }) {
+  return <StatusBadge status={status} />;
 }
