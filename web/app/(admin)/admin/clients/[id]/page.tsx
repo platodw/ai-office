@@ -258,14 +258,6 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-muted">{children}</p>;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  active: "bg-success/10 text-success", onboarding: "bg-primary-soft text-primary-dark",
-  offboarding: "bg-warning/10 text-warning", churned: "bg-surface text-muted",
-};
-function StatusBadge({ status }: { status: string }) {
-  return <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLES[status] ?? "bg-surface text-muted"}`}>{status}</span>;
-}
-
 const INVOICE_STATUS: Record<string, string> = {
   paid: "text-success", sent: "text-primary-dark", overdue: "text-error", draft: "text-muted", void: "text-muted",
 };
@@ -286,9 +278,4 @@ const TICKET_STATUS: Record<string, string> = {
 };
 function TicketStatusBadge({ status }: { status: string }) {
   return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TICKET_STATUS[status] ?? "bg-surface text-muted"}`}>{ticketStatusLabel(status)}</span>;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function _StatusBadgeUnused({ status }: { status: string }) {
-  return <StatusBadge status={status} />;
 }
