@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>You've been invited</title>
+</head>
+<body style="margin:0;padding:0;background:#faf6ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#faf6ef;padding:40px 20px;">
+  <tr>
+    <td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+        <!-- Logo / header -->
+        <tr>
+          <td align="center" style="padding-bottom:28px;">
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#1f1a14;border-radius:10px;padding:14px 20px;" align="center">
+                  <span style="color:#8a6a2e;font-size:22px;font-weight:700;letter-spacing:-0.5px;">✦</span>
+                  <span style="color:#ffffff;font-size:16px;font-weight:600;letter-spacing:0.5px;margin-left:8px;">AI Office</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Card -->
+        <tr>
+          <td style="background:#ffffff;border:1px solid #ddd1bd;border-radius:12px;overflow:hidden;">
+
+            <!-- Card header -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#1f1a14;padding:28px 32px;">
+                  <p style="margin:0;color:#ffffff;font-size:20px;font-weight:600;line-height:1.3;">
+                    You've been invited
+                  </p>
+                  <p style="margin:6px 0 0;color:#c8b89a;font-size:14px;">
+                    Your account is ready. Set your password to get started.
+                  </p>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Card body -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:32px;">
+                  <p style="margin:0 0 20px;color:#3d342a;font-size:15px;line-height:1.6;">
+                    You've been granted access to your organization's dashboard. Click the button below to set your password and log in for the first time.
+                  </p>
+
+                  <!-- CTA button -->
+                  <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                    <tr>
+                      <td style="background:#8a6a2e;border-radius:8px;">
+                        <a href="{{ .ConfirmationURL }}"
+                           style="display:inline-block;padding:13px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;letter-spacing:0.2px;">
+                          Set your password &rarr;
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p style="margin:0 0 8px;color:#8a7d6e;font-size:13px;line-height:1.5;">
+                    This link expires in 24 hours. If you weren't expecting this invitation, you can safely ignore this email.
+                  </p>
+
+                  <!-- Fallback URL -->
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;border-top:1px solid #ddd1bd;">
+                    <tr>
+                      <td style="padding-top:18px;">
+                        <p style="margin:0 0 6px;color:#8a7d6e;font-size:12px;">Or copy this link into your browser:</p>
+                        <p style="margin:0;word-break:break-all;font-family:monospace;font-size:11px;color:#3d342a;background:#f0e9dc;padding:8px 10px;border-radius:6px;border:1px solid #ddd1bd;">
+                          {{ .ConfirmationURL }}
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 0 0;" align="center">
+            <p style="margin:0;color:#8a7d6e;font-size:12px;line-height:1.6;">
+              Sent by <strong style="color:#3d342a;">AI Office</strong> &mdash; Dan Plato Consulting LLC<br />
+              Questions? Reply to this email or contact your administrator.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

@@ -37,8 +37,11 @@ export async function GET(_request: Request, { params }: Params) {
 export async function POST(request: Request, { params }: Params) {
   await requireAdmin();
   const { appId } = await params;
-  const { user_id, app_role = "leadership" } = await request.json();
-  if (!user_id) return NextResponse.json({ error: "user_id required" }, { status: 400 });
+  const body = await request.json();
+  const { user_id, email: inviteEmail, app_role = "leadership" } = body;
+
+  if (!user_id && !inviteEmail)
+    return NextResponse.json({ error: "user_id or email required" }, { status: 400 });
 
   const admin = createServiceClient();
 
@@ -49,14 +52,29 @@ export async function POST(request: Request, { params }: Params) {
     .single();
   if (appErr || !app) return NextResponse.json({ error: "App not found" }, { status: 404 });
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("email, name")
-    .eq("id", user_id)
-    .single();
-  if (!profile?.email) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  // Resolve the email and name we'll use in the target project
+  let grantUserId: string = user_id;
+  let emailForTarget: string = inviteEmail ?? "";
+  let nameForTarget = "";
+
+  if (user_id) {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("email, name")
+      .eq("id", user_id)
+      .single();
+    if (!profile?.email) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    emailForTarget = profile.email;
+    nameForTarget = profile.name ?? "";
+  } else {
+    // Invite-by-email: use the granting admin's id as the app_access user_id
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    grantUserId = user!.id;
+  }
 
   let externalUserId: string | null = null;
+  let wasInvited = false;
 
   if (app.supabase_project_ref && app.supabase_service_key_vault_name) {
     const serviceKey = await getVaultSecret(app.supabase_service_key_vault_name);
@@ -74,52 +92,70 @@ export async function POST(request: Request, { params }: Params) {
       "apikey": serviceKey,
     };
 
-    // Step 1: Check if user already exists in the target app's user_profiles table.
-    // This avoids the auth admin API entirely for users created via direct SQL.
+    // Check if user already exists via user_profiles (avoids broken admin API for direct-SQL users)
     const profileLookupRes = await fetch(
-      `${baseUrl}/rest/v1/user_profiles?email=eq.${encodeURIComponent(profile.email)}&select=id`,
+      `${baseUrl}/rest/v1/user_profiles?email=eq.${encodeURIComponent(emailForTarget)}&select=id`,
       { headers }
     );
     if (profileLookupRes.ok) {
-      const rows = await profileLookupRes.json();
-      if (Array.isArray(rows) && rows.length > 0) {
-        externalUserId = rows[0].id ?? null;
+      const existing = await profileLookupRes.json();
+      if (Array.isArray(existing) && existing.length > 0) {
+        externalUserId = existing[0].id ?? null;
       }
     }
 
-    // Step 2: If not found in user_profiles, create via admin API (new user).
     if (!externalUserId) {
-      const createRes = await fetch(`${baseUrl}/auth/v1/admin/users`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          email: profile.email,
-          email_confirm: true,
-          user_metadata: { name: profile.name ?? "" },
-        }),
-      });
-
-      if (createRes.ok) {
-        const created = await createRes.json();
-        externalUserId = created.id ?? null;
+      if (inviteEmail) {
+        // New user path: send branded invite email so they can set their own password
+        const inviteRes = await fetch(`${baseUrl}/auth/v1/admin/invite`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ email: emailForTarget, data: { invited_by: "AI Office" } }),
+        });
+        if (inviteRes.ok) {
+          const invited = await inviteRes.json();
+          externalUserId = invited.id ?? null;
+          wasInvited = true;
+        } else {
+          const err = await inviteRes.json().catch(() => ({}));
+          return NextResponse.json(
+            { error: (err as { msg?: string }).msg ?? "Invite failed" },
+            { status: 500 }
+          );
+        }
       } else {
-        const err = await createRes.json().catch(() => ({}));
-        return NextResponse.json(
-          { error: (err as { msg?: string }).msg ?? "Failed to create user in target app" },
-          { status: 500 }
-        );
+        // Portal user path: create silently (they already have an AI Office account)
+        const createRes = await fetch(`${baseUrl}/auth/v1/admin/users`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            email: emailForTarget,
+            email_confirm: true,
+            user_metadata: { name: nameForTarget },
+          }),
+        });
+        if (createRes.ok) {
+          const created = await createRes.json();
+          externalUserId = created.id ?? null;
+        } else {
+          const err = await createRes.json().catch(() => ({}));
+          return NextResponse.json(
+            { error: (err as { msg?: string }).msg ?? "Failed to create user in target app" },
+            { status: 500 }
+          );
+        }
       }
     }
 
-    // Step 3: Upsert role in target user_profiles.
+    // Upsert role in target user_profiles
     if (externalUserId) {
       await fetch(`${baseUrl}/rest/v1/user_profiles`, {
         method: "POST",
         headers: { ...headers, "Prefer": "resolution=merge-duplicates" },
         body: JSON.stringify({
           id: externalUserId,
-          email: profile.email,
-          name: profile.name ?? "",
+          email: emailForTarget,
+          name: nameForTarget,
           role: app_role,
         }),
       });
@@ -129,12 +165,12 @@ export async function POST(request: Request, { params }: Params) {
   const { data: access, error: insertErr } = await admin
     .from("app_access")
     .upsert(
-      { app_id: appId, user_id, external_user_id: externalUserId, status: "active", revoked_at: null },
+      { app_id: appId, user_id: grantUserId, external_user_id: externalUserId, status: "active", revoked_at: null },
       { onConflict: "app_id,user_id" }
     )
     .select()
     .single();
 
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });
-  return NextResponse.json({ ...access, email: profile.email });
+  return NextResponse.json({ ...access, email: emailForTarget, invited: wasInvited });
 }
