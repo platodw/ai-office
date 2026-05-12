@@ -61,32 +61,36 @@ export async function POST(request: Request, { params }: Params) {
       "apikey": serviceKey,
     };
 
-    const createRes = await fetch(`${baseUrl}/auth/v1/admin/users`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        email: profile.email,
-        email_confirm: true,
-        user_metadata: { name: profile.name ?? "" },
-      }),
-    });
-
-    if (createRes.ok) {
-      const created = await createRes.json();
-      externalUserId = created.id ?? null;
-    } else {
-      // On any failure (422 = already exists, 500 = "Database error checking email" for
-      // users created via direct SQL without an auth.identities row), try lookup by email.
-      const lookupRes = await fetch(
-        `${baseUrl}/auth/v1/admin/users?email=${encodeURIComponent(profile.email)}`,
-        { headers }
-      );
-      if (lookupRes.ok) {
-        const list = await lookupRes.json();
-        externalUserId = list.users?.[0]?.id ?? null;
+    // Step 1: Check if user already exists in the target app's user_profiles table.
+    // This avoids the auth admin API entirely for users created via direct SQL,
+    // which can have a broken auth.identities state that crashes the admin API.
+    const profileLookupRes = await fetch(
+      `${baseUrl}/rest/v1/user_profiles?email=eq.${encodeURIComponent(profile.email)}&select=id`,
+      { headers }
+    );
+    if (profileLookupRes.ok) {
+      const rows = await profileLookupRes.json();
+      if (Array.isArray(rows) && rows.length > 0) {
+        externalUserId = rows[0].id ?? null;
       }
+    }
 
-      if (!externalUserId) {
+    // Step 2: If not found in user_profiles, create via admin API (new user).
+    if (!externalUserId) {
+      const createRes = await fetch(`${baseUrl}/auth/v1/admin/users`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          email: profile.email,
+          email_confirm: true,
+          user_metadata: { name: profile.name ?? "" },
+        }),
+      });
+
+      if (createRes.ok) {
+        const created = await createRes.json();
+        externalUserId = created.id ?? null;
+      } else {
         const err = await createRes.json().catch(() => ({}));
         return NextResponse.json(
           { error: (err as { msg?: string }).msg ?? "Failed to create user in target app" },
@@ -95,7 +99,7 @@ export async function POST(request: Request, { params }: Params) {
       }
     }
 
-    // Set role in target user_profiles
+    // Step 3: Upsert role in target user_profiles.
     if (externalUserId) {
       await fetch(`${baseUrl}/rest/v1/user_profiles`, {
         method: "POST",
