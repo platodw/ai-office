@@ -49,7 +49,7 @@ export async function POST(request: Request, { params }: Params) {
     const serviceKey = await getVaultSecret(app.supabase_service_key_vault_name);
     if (!serviceKey) {
       return NextResponse.json(
-        { error: `Service key "${app.supabase_service_key_vault_name}" not found in vault. Add it via Project Settings > API in Supabase dashboard.` },
+        { error: `Service key "${app.supabase_service_key_vault_name}" not found in vault.` },
         { status: 500 }
       );
     }
@@ -74,22 +74,25 @@ export async function POST(request: Request, { params }: Params) {
     if (createRes.ok) {
       const created = await createRes.json();
       externalUserId = created.id ?? null;
-    } else if (createRes.status === 422) {
-      // User already exists — look them up
-      const listRes = await fetch(
+    } else {
+      // On any failure (422 = already exists, 500 = "Database error checking email" for
+      // users created via direct SQL without an auth.identities row), try lookup by email.
+      const lookupRes = await fetch(
         `${baseUrl}/auth/v1/admin/users?email=${encodeURIComponent(profile.email)}`,
         { headers }
       );
-      if (listRes.ok) {
-        const list = await listRes.json();
+      if (lookupRes.ok) {
+        const list = await lookupRes.json();
         externalUserId = list.users?.[0]?.id ?? null;
       }
-    } else {
-      const err = await createRes.json().catch(() => ({}));
-      return NextResponse.json(
-        { error: (err as { msg?: string }).msg ?? "Failed to create user in target app" },
-        { status: 500 }
-      );
+
+      if (!externalUserId) {
+        const err = await createRes.json().catch(() => ({}));
+        return NextResponse.json(
+          { error: (err as { msg?: string }).msg ?? "Failed to create user in target app" },
+          { status: 500 }
+        );
+      }
     }
 
     // Set role in target user_profiles
