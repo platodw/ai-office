@@ -10,15 +10,28 @@ export async function GET(_request: Request, { params }: Params) {
   const { appId } = await params;
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const { data: rows, error } = await supabase
     .from("app_access")
-    .select("id, user_id, external_user_id, status, granted_at, profiles(name, email)")
+    .select("id, user_id, external_user_id, status, granted_at")
     .eq("app_id", appId)
     .eq("status", "active")
     .order("granted_at");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  if (!rows?.length) return NextResponse.json([]);
+
+  // Fetch profiles separately — app_access.user_id FKs to auth.users, not profiles,
+  // so PostgREST can't auto-join them.
+  const userIds = rows.map(r => r.user_id);
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, name, email")
+    .in("id", userIds);
+
+  const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p]));
+  const result = rows.map(r => ({ ...r, profiles: profileMap[r.user_id] ?? null }));
+
+  return NextResponse.json(result);
 }
 
 export async function POST(request: Request, { params }: Params) {
@@ -62,8 +75,7 @@ export async function POST(request: Request, { params }: Params) {
     };
 
     // Step 1: Check if user already exists in the target app's user_profiles table.
-    // This avoids the auth admin API entirely for users created via direct SQL,
-    // which can have a broken auth.identities state that crashes the admin API.
+    // This avoids the auth admin API entirely for users created via direct SQL.
     const profileLookupRes = await fetch(
       `${baseUrl}/rest/v1/user_profiles?email=eq.${encodeURIComponent(profile.email)}&select=id`,
       { headers }
