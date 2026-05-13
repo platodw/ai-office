@@ -117,11 +117,10 @@ export async function POST(request: Request, { params }: Params) {
           externalUserId = invited.id ?? null;
           wasInvited = true;
         } else {
-          const err = await inviteRes.json().catch(() => ({}));
-          return NextResponse.json(
-            { error: (err as { msg?: string }).msg ?? "Invite failed" },
-            { status: 500 }
-          );
+          const err = await inviteRes.json().catch(() => ({})) as Record<string, unknown>;
+          const errMsg = (err.msg ?? err.message ?? err.error_description ?? err.error ?? "Invite failed") as string;
+          console.error("[invite] Supabase invite error:", JSON.stringify(err));
+          return NextResponse.json({ error: errMsg }, { status: 500 });
         }
       } else {
         // Portal user path: create silently (they already have an AI Office account)
@@ -138,11 +137,10 @@ export async function POST(request: Request, { params }: Params) {
           const created = await createRes.json();
           externalUserId = created.id ?? null;
         } else {
-          const err = await createRes.json().catch(() => ({}));
-          return NextResponse.json(
-            { error: (err as { msg?: string }).msg ?? "Failed to create user in target app" },
-            { status: 500 }
-          );
+          const err = await createRes.json().catch(() => ({})) as Record<string, unknown>;
+          const errMsg = (err.msg ?? err.message ?? err.error_description ?? err.error ?? "Failed to create user in target app") as string;
+          console.error("[invite] Supabase create user error:", JSON.stringify(err));
+          return NextResponse.json({ error: errMsg }, { status: 500 });
         }
       }
     }
