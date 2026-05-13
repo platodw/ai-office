@@ -106,11 +106,20 @@ export async function POST(request: Request, { params }: Params) {
 
     if (!externalUserId) {
       if (inviteEmail) {
-        // New user path: send branded invite email so they can set their own password
-        const inviteRes = await fetch(`${baseUrl}/auth/v1/admin/invite`, {
+        // New user path: generate invite link (sends email so they can set their own password).
+        // /admin/invite is not available on all GoTrue versions; generate_link is the reliable path.
+        const appOrigin = app.supabase_project_ref === "nazncaatcqmhzonqgfjy"
+          ? "https://imperial-plastics.vercel.app/ai-office"
+          : `https://${app.supabase_project_ref}.supabase.co`;
+        const inviteRes = await fetch(`${baseUrl}/auth/v1/admin/generate_link`, {
           method: "POST",
           headers,
-          body: JSON.stringify({ email: emailForTarget, data: { invited_by: "AI Office" } }),
+          body: JSON.stringify({
+            type: "invite",
+            email: emailForTarget,
+            redirect_to: appOrigin,
+            data: { invited_by: "AI Office" },
+          }),
         });
         if (inviteRes.ok) {
           const invited = await inviteRes.json();
