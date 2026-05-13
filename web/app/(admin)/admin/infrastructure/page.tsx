@@ -28,30 +28,34 @@ const SERVICES: ServiceDef[] = [
 type SessionRow = {
   client: string;
   service: string;
-  last_refreshed: string | null;
-  status: string | null;
+  refreshed_at: string | null;
+  is_valid: boolean | null;
+  failure_count: number | null;
 };
 
 type HealthStatus = "healthy" | "stale" | "down" | "unknown";
 
-function computeHealth(row: SessionRow | undefined): { status: HealthStatus; lastRefreshed: string | null } {
-  if (!row || !row.last_refreshed) return { status: "unknown", lastRefreshed: null };
-  const ageMs = Date.now() - new Date(row.last_refreshed).getTime();
+function computeHealth(row: SessionRow | undefined): { status: HealthStatus; refreshedAt: string | null } {
+  if (!row || !row.refreshed_at) return { status: "unknown", refreshedAt: null };
+  if (!row.is_valid || (row.failure_count ?? 0) > 0) return { status: "down", refreshedAt: row.refreshed_at };
+  const ageMs = Date.now() - new Date(row.refreshed_at).getTime();
   const ageHours = ageMs / 1000 / 60 / 60;
   let status: HealthStatus;
   if (ageHours < 4) status = "healthy";
   else if (ageHours < 8) status = "stale";
   else status = "down";
-  return { status, lastRefreshed: row.last_refreshed };
+  return { status, refreshedAt: row.refreshed_at };
 }
 
 async function fetchSessions(): Promise<SessionRow[]> {
   const url = process.env.INFRA_SUPABASE_URL;
-  const key = process.env.INFRA_SUPABASE_ANON_KEY;
+  const key = process.env.INFRA_SUPABASE_SERVICE_KEY;
   if (!url || !key) return [];
   try {
     const sb = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-    const { data } = await sb.from("sessions").select("client, service, last_refreshed, status");
+    const { data } = await sb
+      .from("sessions")
+      .select("client, service, refreshed_at, is_valid, failure_count");
     return (data as SessionRow[]) ?? [];
   } catch {
     return [];
@@ -62,7 +66,7 @@ export const metadata = { title: "Infrastructure — AI Office Admin" };
 
 export default async function InfrastructurePage() {
   const sessions = await fetchSessions();
-  const infraEnvMissing = !process.env.INFRA_SUPABASE_URL;
+  const infraEnvMissing = !process.env.INFRA_SUPABASE_URL || !process.env.INFRA_SUPABASE_SERVICE_KEY;
 
   return (
     <div>
@@ -73,7 +77,7 @@ export default async function InfrastructurePage() {
         <div className="mb-6 px-4 py-3 rounded-lg bg-warning/10 border border-warning/20 text-sm text-warning">
           <span className="font-semibold">Health data unavailable</span> — add{" "}
           <code className="font-mono text-xs">INFRA_SUPABASE_URL</code> and{" "}
-          <code className="font-mono text-xs">INFRA_SUPABASE_ANON_KEY</code> to Vercel env vars.
+          <code className="font-mono text-xs">INFRA_SUPABASE_SERVICE_KEY</code> to Vercel env vars.
         </div>
       )}
 
@@ -82,7 +86,7 @@ export default async function InfrastructurePage() {
           const sessionRow = sessions.find(
             (s) => s.client === svc.sessionClient && s.service === svc.sessionService
           );
-          const { status, lastRefreshed } = computeHealth(sessionRow);
+          const { status, refreshedAt } = computeHealth(sessionRow);
           return (
             <div key={svc.id} className="bg-surface-2 border border-border rounded-xl p-5">
               <div className="flex items-start justify-between gap-4">
@@ -111,9 +115,9 @@ export default async function InfrastructurePage() {
                 </div>
                 <div className="shrink-0 text-right">
                   <HealthBadge status={status} />
-                  {lastRefreshed && (
+                  {refreshedAt && (
                     <div className="text-[10px] text-muted mt-1">
-                      Refreshed {formatAge(lastRefreshed)}
+                      Refreshed {formatAge(refreshedAt)}
                     </div>
                   )}
                 </div>
