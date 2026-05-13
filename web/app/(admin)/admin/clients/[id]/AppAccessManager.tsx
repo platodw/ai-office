@@ -40,6 +40,8 @@ export default function AppAccessManager({
   const [inviteRole, setInviteRole] = useState("leadership");
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Portal user grant state
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -67,26 +69,35 @@ export default function AppAccessManager({
     if (!inviteEmail) return;
     setInviting(true);
     setInviteMsg(null);
+    setInviteLink(null);
+    setLinkCopied(false);
     const res = await fetch(`/api/admin/clients/${clientId}/apps/${appId}/users`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: inviteEmail, app_role: inviteRole }),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({})) as { invited?: boolean; error?: string; action_link?: string };
     if (res.ok) {
-      const wasInvited = (data as { invited?: boolean }).invited;
       setInviteMsg({
         ok: true,
-        text: wasInvited
+        text: data.invited
           ? `Invite sent to ${inviteEmail}. They'll receive an email to set their password.`
           : `${inviteEmail} already had an account and has been granted access.`,
       });
+      if (data.action_link) setInviteLink(data.action_link);
       setInviteEmail("");
       load();
     } else {
-      setInviteMsg({ ok: false, text: (data as { error?: string }).error ?? "Invite failed." });
+      setInviteMsg({ ok: false, text: data.error ?? "Invite failed." });
     }
     setInviting(false);
+  }
+
+  function copyInviteLink() {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   }
 
   async function grantAccess() {
@@ -193,8 +204,19 @@ export default function AppAccessManager({
               {inviteMsg && (
                 <p className={`text-xs ${inviteMsg.ok ? "text-success" : "text-error"}`}>{inviteMsg.text}</p>
               )}
+              {inviteLink && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[11px] text-muted flex-1 truncate font-mono">{inviteLink}</span>
+                  <button
+                    onClick={copyInviteLink}
+                    className="text-[11px] font-semibold text-primary hover:underline whitespace-nowrap"
+                  >
+                    {linkCopied ? "Copied!" : "Copy link"}
+                  </button>
+                </div>
+              )}
               <p className="text-[11px] text-muted">
-                New users receive a branded email to set their password. Existing users are granted access immediately.
+                New users receive an email to set their password. Use &ldquo;Copy link&rdquo; if email doesn&rsquo;t arrive.
               </p>
             </>
           ) : (

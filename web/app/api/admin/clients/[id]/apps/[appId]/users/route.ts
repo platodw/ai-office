@@ -119,9 +119,11 @@ export async function POST(request: Request, { params }: Params) {
             data: { invited_by: "AI Office" },
           }),
         });
+        let inviteActionLink: string | null = null;
         if (inviteRes.ok) {
           const invited = await inviteRes.json();
           externalUserId = invited.id ?? null;
+          inviteActionLink = invited.action_link ?? null;
           wasInvited = true;
         } else {
           const err = await inviteRes.json().catch(() => ({})) as Record<string, unknown>;
@@ -177,5 +179,5 @@ export async function POST(request: Request, { params }: Params) {
     .single();
 
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });
-  return NextResponse.json({ ...access, email: emailForTarget, invited: wasInvited });
+  return NextResponse.json({ ...access, email: emailForTarget, invited: wasInvited, action_link: inviteActionLink ?? undefined });
 }
