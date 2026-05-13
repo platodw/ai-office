@@ -47,7 +47,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const { data: app, error: appErr } = await admin
     .from("client_apps")
-    .select("id, name, supabase_project_ref, supabase_service_key_vault_name")
+    .select("id, name, production_url, supabase_project_ref, supabase_service_key_vault_name")
     .eq("id", appId)
     .single();
   if (appErr || !app) return NextResponse.json({ error: "App not found" }, { status: 404 });
@@ -108,16 +108,14 @@ export async function POST(request: Request, { params }: Params) {
       if (inviteEmail) {
         // New user path: generate invite link (sends email so they can set their own password).
         // /admin/invite is not available on all GoTrue versions; generate_link is the reliable path.
-        const appOrigin = app.supabase_project_ref === "nazncaatcqmhzonqgfjy"
-          ? "https://imperial-plastics.vercel.app/ai-office"
-          : `https://${app.supabase_project_ref}.supabase.co`;
+        const redirectTo = app.production_url ?? undefined;
         const inviteRes = await fetch(`${baseUrl}/auth/v1/admin/generate_link`, {
           method: "POST",
           headers,
           body: JSON.stringify({
             type: "invite",
             email: emailForTarget,
-            redirect_to: appOrigin,
+            ...(redirectTo ? { redirect_to: redirectTo } : {}),
             data: { invited_by: "AI Office" },
           }),
         });
