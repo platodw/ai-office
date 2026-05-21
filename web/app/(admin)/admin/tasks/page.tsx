@@ -15,5 +15,6 @@ export default async function TasksPage() {
       .order("name"),
   ]);
 
-  return <TasksClient initialTasks={tasks ?? []} clients={clients ?? []} />;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <TasksClient initialTasks={(tasks ?? []) as any[]} clients={clients ?? []} />;
 }
