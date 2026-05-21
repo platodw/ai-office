@@ -11,7 +11,7 @@ type Task = {
   due_date: string | null;
   client_id: string | null;
   created_at: string;
-  clients: { id: string; name: string } | null;
+  clients: { id: string; name: string }[] | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -252,7 +252,7 @@ export default function TasksClient({
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-muted">
-                    {task.clients?.name ?? <span className="italic">AI Office</span>}
+                    {task.clients?.[0]?.name ?? <span className="italic">AI Office</span>}
                   </td>
                   <td className="px-4 py-3">
                     <span
