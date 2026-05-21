@@ -75,6 +75,7 @@ export async function POST(request: Request, { params }: Params) {
 
   let externalUserId: string | null = null;
   let wasInvited = false;
+  let inviteActionLink: string | null = null;
 
   if (app.supabase_project_ref && app.supabase_service_key_vault_name) {
     const serviceKey = await getVaultSecret(app.supabase_service_key_vault_name);
@@ -119,7 +120,6 @@ export async function POST(request: Request, { params }: Params) {
             data: { invited_by: "AI Office" },
           }),
         });
-        let inviteActionLink: string | null = null;
         if (inviteRes.ok) {
           const invited = await inviteRes.json();
           externalUserId = invited.id ?? null;
