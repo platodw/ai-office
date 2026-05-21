@@ -5,6 +5,7 @@ import PortalUsersPanel from "./PortalUsersPanel";
 import ClientStatusSelect from "./ClientStatusSelect";
 import DeployedAppsSection from "./DeployedAppsSection";
 import KbArticlesPanel from "./KbArticlesPanel";
+import ApiConfigsSection from "./ApiConfigsSection";
 import { ticketStatusLabel } from "@/lib/support/status-labels";
 
 export default async function AdminClientDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -112,26 +113,7 @@ export default async function AdminClientDetail({ params }: { params: Promise<{ 
 
         {/* API configurations */}
         <Section title="API configurations" action={{ label: "Add config", href: `/admin/clients/${id}/api-configs/new` }}>
-          {!apiConfigs?.length ? (
-            <Empty>No API configurations added.</Empty>
-          ) : (
-            <ul className="space-y-2">
-              {apiConfigs.map((c) => (
-                <li key={c.id} className="flex items-center justify-between py-1.5">
-                  <div>
-                    <div className="text-sm font-medium text-text">{c.display_name}</div>
-                    <div className="text-xs text-muted font-mono">{c.provider} / {c.external_id}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${c.is_active ? "bg-success/10 text-success" : "bg-surface text-muted"}`}>
-                      {c.is_active ? "active" : "inactive"}
-                    </span>
-                    <a href={`/admin/clients/${id}/api-configs/${c.id}/edit`} className="text-xs text-muted hover:text-text transition-colors">Edit</a>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <ApiConfigsSection clientId={id} configs={apiConfigs ?? []} />
         </Section>
 
         {/* Services */}
