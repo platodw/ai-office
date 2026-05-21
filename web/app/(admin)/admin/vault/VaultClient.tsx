@@ -9,7 +9,7 @@ type VaultEntry = {
   notes: string | null;
   client_id: string | null;
   created_at: string;
-  clients: { id: string; name: string }[] | null;
+  clients: { id: string; name: string } | null;
 };
 
 export default function VaultClient({
@@ -223,7 +223,7 @@ export default function VaultClient({
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-muted">
-                    {entry.clients?.[0]?.name ?? <span className="italic">AI Office</span>}
+                    {entry.clients?.name ?? <span className="italic">AI Office</span>}
                   </td>
                   <td className="px-4 py-3">
                     {revealed[entry.id] ? (
