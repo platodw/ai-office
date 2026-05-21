@@ -8,7 +8,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen flex bg-bg">
-      {/* Sidebar */}
       <aside className="w-56 shrink-0 border-r border-border flex flex-col">
         <div className="px-4 py-4 border-b border-border flex items-center gap-2">
           <LogoMark size={20} />
@@ -23,6 +22,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <NavLink href="/admin/billing">Billing</NavLink>
           <NavLink href="/admin/support">Support</NavLink>
           <NavLink href="/admin/support/approvals">Approvals</NavLink>
+          <NavLink href="/admin/tasks">Project Management</NavLink>
+          <NavLink href="/admin/vault">Credential Vault</NavLink>
           <div className="pt-2 pb-1 px-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted/60">System</div>
           </div>
@@ -34,7 +35,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
       </aside>
 
-      {/* Main */}
       <div className="flex-1 min-w-0">
         <main className="p-8">{children}</main>
       </div>
