@@ -11,7 +11,7 @@ type Task = {
   due_date: string | null;
   client_id: string | null;
   created_at: string;
-  clients: { id: string; name: string }[] | null;
+  clients: { id: string; name: string } | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -49,12 +49,22 @@ export default function TasksClient({
   const [filter, setFilter] = useState<"all" | "todo" | "in_progress" | "done">("all");
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
   const [form, setForm] = useState({
     title: "",
     notes: "",
     client_id: "",
     priority: "normal",
     due_date: "",
+  });
+  const [editForm, setEditForm] = useState({
+    title: "",
+    notes: "",
+    client_id: "",
+    priority: "normal",
+    due_date: "",
+    status: "todo",
   });
 
   const filtered = filter === "all" ? tasks : tasks.filter((t) => t.status === filter);
@@ -64,6 +74,46 @@ export default function TasksClient({
     in_progress: tasks.filter((t) => t.status === "in_progress").length,
     done: tasks.filter((t) => t.status === "done").length,
   };
+
+  function startEdit(task: Task) {
+    setEditingId(task.id);
+    setEditForm({
+      title: task.title,
+      notes: task.notes ?? "",
+      client_id: task.client_id ?? "",
+      priority: task.priority,
+      due_date: task.due_date ?? "",
+      status: task.status,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId || !editForm.title.trim()) return;
+    setEditSaving(true);
+    const res = await fetch(`/api/admin/tasks/${editingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: editForm.title.trim(),
+        notes: editForm.notes || null,
+        client_id: editForm.client_id || null,
+        priority: editForm.priority,
+        due_date: editForm.due_date || null,
+        status: editForm.status,
+      }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setTasks(tasks.map((t) => (t.id === editingId ? updated : t)));
+      setEditingId(null);
+    }
+    setEditSaving(false);
+  }
 
   async function createTask(e: React.FormEvent) {
     e.preventDefault();
@@ -107,6 +157,9 @@ export default function TasksClient({
     await fetch(`/api/admin/tasks/${id}`, { method: "DELETE" });
     setTasks(tasks.filter((t) => t.id !== id));
   }
+
+  const inputCls = "w-full bg-bg border border-border rounded-lg px-3 py-1.5 text-sm text-text focus:outline-none focus:border-primary-dark";
+  const selectCls = inputCls;
 
   return (
     <div>
@@ -238,60 +291,157 @@ export default function TasksClient({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((task, i) => (
-                <tr
-                  key={task.id}
-                  className={`${
-                    i < filtered.length - 1 ? "border-b border-border" : ""
-                  } hover:bg-surface transition-colors`}
-                >
-                  <td className="px-4 py-3">
-                    <div className="text-sm text-text font-medium">{task.title}</div>
-                    {task.notes && (
-                      <div className="text-xs text-muted mt-0.5">{task.notes}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted">
-                    {task.clients?.[0]?.name ?? <span className="italic">AI Office</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                        PRIORITY_STYLES[task.priority]
-                      }`}
-                    >
-                      {task.priority}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted">
-                    {task.due_date
-                      ? new Date(task.due_date + "T00:00:00").toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })
-                      : <span className="text-xs">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => cycleStatus(task)}
-                      title="Click to advance status"
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full cursor-pointer hover:opacity-75 transition-opacity ${
-                        STATUS_STYLES[task.status]
-                      }`}
-                    >
-                      {STATUS_LABEL[task.status]}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      className="text-xs text-muted hover:text-error transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((task, i) =>
+                editingId === task.id ? (
+                  <tr key={task.id} className={i < filtered.length - 1 ? "border-b border-border" : ""}>
+                    <td colSpan={6} className="px-4 py-3">
+                      <form onSubmit={saveEdit} className="flex flex-wrap gap-2 items-end">
+                        <div className="flex-1 min-w-[180px]">
+                          <label className="block text-xs text-muted mb-1">Title</label>
+                          <input
+                            required
+                            value={editForm.title}
+                            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-[140px]">
+                          <label className="block text-xs text-muted mb-1">Notes</label>
+                          <input
+                            value={editForm.notes}
+                            onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                            className={inputCls}
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div className="w-36">
+                          <label className="block text-xs text-muted mb-1">Client</label>
+                          <select
+                            value={editForm.client_id}
+                            onChange={(e) => setEditForm({ ...editForm, client_id: e.target.value })}
+                            className={selectCls}
+                          >
+                            <option value="">AI Office</option>
+                            {clients.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-28">
+                          <label className="block text-xs text-muted mb-1">Priority</label>
+                          <select
+                            value={editForm.priority}
+                            onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}
+                            className={selectCls}
+                          >
+                            <option value="low">Low</option>
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                          </select>
+                        </div>
+                        <div className="w-32">
+                          <label className="block text-xs text-muted mb-1">Status</label>
+                          <select
+                            value={editForm.status}
+                            onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                            className={selectCls}
+                          >
+                            <option value="todo">To Do</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="done">Done</option>
+                          </select>
+                        </div>
+                        <div className="w-32">
+                          <label className="block text-xs text-muted mb-1">Due date</label>
+                          <input
+                            type="date"
+                            value={editForm.due_date}
+                            onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div className="flex gap-2 pb-0.5">
+                          <button
+                            type="submit"
+                            disabled={editSaving}
+                            className="bg-primary-dark text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 disabled:opacity-50"
+                          >
+                            {editSaving ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            className="text-xs text-muted hover:text-text px-3 py-1.5"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr
+                    key={task.id}
+                    className={`${
+                      i < filtered.length - 1 ? "border-b border-border" : ""
+                    } hover:bg-surface transition-colors`}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-text font-medium">{task.title}</div>
+                      {task.notes && (
+                        <div className="text-xs text-muted mt-0.5">{task.notes}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted">
+                      {task.clients?.name ?? <span className="italic">AI Office</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          PRIORITY_STYLES[task.priority]
+                        }`}
+                      >
+                        {task.priority}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted">
+                      {task.due_date
+                        ? new Date(task.due_date + "T00:00:00").toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })
+                        : <span className="text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => cycleStatus(task)}
+                        title="Click to advance status"
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full cursor-pointer hover:opacity-75 transition-opacity ${
+                          STATUS_STYLES[task.status]
+                        }`}
+                      >
+                        {STATUS_LABEL[task.status]}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center gap-3 justify-end">
+                        <button
+                          onClick={() => startEdit(task)}
+                          className="text-xs text-muted hover:text-text transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteTask(task.id)}
+                          className="text-xs text-muted hover:text-error transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              )}
             </tbody>
           </table>
         </div>
