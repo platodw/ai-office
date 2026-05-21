@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Client = { id: string; name: string };
 type Task = {
@@ -13,6 +13,26 @@ type Task = {
   created_at: string;
   clients: { id: string; name: string } | null;
 };
+type SortKey = "created_desc" | "due_asc" | "due_desc" | "priority_desc" | "due_then_priority";
+type StatusFilter = "all" | "todo" | "in_progress" | "done";
+
+const PREFS_KEY = "ai-office-tasks-prefs";
+
+const DEFAULT_PREFS = {
+  status: "all" as StatusFilter,
+  clientId: "",
+  priority: "",
+  sort: "created_desc" as SortKey,
+};
+
+function loadPrefs(): typeof DEFAULT_PREFS {
+  if (typeof window === "undefined") return DEFAULT_PREFS;
+  try {
+    const saved = localStorage.getItem(PREFS_KEY);
+    if (saved) return { ...DEFAULT_PREFS, ...JSON.parse(saved) };
+  } catch {}
+  return DEFAULT_PREFS;
+}
 
 const STATUS_LABEL: Record<string, string> = {
   todo: "To Do",
@@ -38,6 +58,39 @@ const PRIORITY_STYLES: Record<string, string> = {
   high: "bg-warning/10 text-warning",
 };
 
+const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 };
+
+function sortTasks(tasks: Task[], sort: SortKey): Task[] {
+  return [...tasks].sort((a, b) => {
+    switch (sort) {
+      case "due_asc": {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return a.due_date.localeCompare(b.due_date);
+      }
+      case "due_desc": {
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return b.due_date.localeCompare(a.due_date);
+      }
+      case "priority_desc":
+        return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+      case "due_then_priority": {
+        if (!a.due_date && !b.due_date)
+          return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        const cmp = a.due_date.localeCompare(b.due_date);
+        return cmp !== 0 ? cmp : PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+      }
+      default:
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+  });
+}
+
 export default function TasksClient({
   initialTasks,
   clients,
@@ -46,7 +99,8 @@ export default function TasksClient({
   clients: Client[];
 }) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [filter, setFilter] = useState<"all" | "todo" | "in_progress" | "done">("all");
+  const [prefs, setPrefs] = useState<typeof DEFAULT_PREFS>(DEFAULT_PREFS);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -67,8 +121,38 @@ export default function TasksClient({
     status: "todo",
   });
 
-  const filtered = filter === "all" ? tasks : tasks.filter((t) => t.status === filter);
-  const counts = {
+  // Load prefs from localStorage after mount (avoids SSR mismatch)
+  useEffect(() => {
+    setPrefs(loadPrefs());
+    setPrefsLoaded(true);
+  }, []);
+
+  // Persist prefs whenever they change
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    } catch {}
+  }, [prefs, prefsLoaded]);
+
+  function updatePrefs(patch: Partial<typeof DEFAULT_PREFS>) {
+    setPrefs((p) => ({ ...p, ...patch }));
+  }
+
+  const hasActiveFilters =
+    prefs.status !== "all" || prefs.clientId !== "" || prefs.priority !== "";
+
+  const displayTasks = sortTasks(
+    tasks.filter((t) => {
+      if (prefs.status !== "all" && t.status !== prefs.status) return false;
+      if (prefs.clientId && t.client_id !== prefs.clientId) return false;
+      if (prefs.priority && t.priority !== prefs.priority) return false;
+      return true;
+    }),
+    prefs.sort
+  );
+
+  const counts: Record<StatusFilter, number> = {
     all: tasks.length,
     todo: tasks.filter((t) => t.status === "todo").length,
     in_progress: tasks.filter((t) => t.status === "in_progress").length,
@@ -85,10 +169,6 @@ export default function TasksClient({
       due_date: task.due_date ?? "",
       status: task.status,
     });
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
   }
 
   async function saveEdit(e: React.FormEvent) {
@@ -158,7 +238,8 @@ export default function TasksClient({
     setTasks(tasks.filter((t) => t.id !== id));
   }
 
-  const inputCls = "w-full bg-bg border border-border rounded-lg px-3 py-1.5 text-sm text-text focus:outline-none focus:border-primary-dark";
+  const inputCls =
+    "w-full bg-bg border border-border rounded-lg px-3 py-1.5 text-sm text-text focus:outline-none focus:border-primary-dark";
   const selectCls = inputCls;
 
   return (
@@ -166,7 +247,9 @@ export default function TasksClient({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-text mb-1">Project Management</h1>
-          <p className="text-sm text-muted">Tasks across all clients and internal AI Office work</p>
+          <p className="text-sm text-muted">
+            Tasks across all clients and internal AI Office work
+          </p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -202,7 +285,9 @@ export default function TasksClient({
               >
                 <option value="">AI Office (General)</option>
                 {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -256,26 +341,85 @@ export default function TasksClient({
         </form>
       )}
 
-      <div className="flex gap-1 mb-4">
-        {(["all", "todo", "in_progress", "done"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
-              filter === f
-                ? "bg-primary-soft text-primary-dark font-semibold"
-                : "text-muted hover:text-text hover:bg-surface"
-            }`}
+      {/* Filter + sort bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/* Status chips */}
+        <div className="flex gap-1">
+          {(["all", "todo", "in_progress", "done"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => updatePrefs({ status: f })}
+              className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                prefs.status === f
+                  ? "bg-primary-soft text-primary-dark font-semibold"
+                  : "text-muted hover:text-text hover:bg-surface"
+              }`}
+            >
+              {f === "all" ? "All" : STATUS_LABEL[f]}{" "}
+              <span className="opacity-60">({counts[f]})</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+        {/* Client filter */}
+        {clients.length > 0 && (
+          <select
+            value={prefs.clientId}
+            onChange={(e) => updatePrefs({ clientId: e.target.value })}
+            className="bg-bg border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary-dark"
           >
-            {f === "all" ? "All" : STATUS_LABEL[f]}{" "}
-            <span className="opacity-60">({counts[f]})</span>
+            <option value="">All clients</option>
+            <option value="__none__">AI Office (General)</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Priority filter */}
+        <select
+          value={prefs.priority}
+          onChange={(e) => updatePrefs({ priority: e.target.value })}
+          className="bg-bg border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary-dark"
+        >
+          <option value="">All priorities</option>
+          <option value="high">High</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low</option>
+        </select>
+
+        {/* Sort */}
+        <select
+          value={prefs.sort}
+          onChange={(e) => updatePrefs({ sort: e.target.value as SortKey })}
+          className="bg-bg border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary-dark ml-auto"
+        >
+          <option value="created_desc">Newest first</option>
+          <option value="due_asc">Due date (soonest)</option>
+          <option value="due_desc">Due date (latest)</option>
+          <option value="priority_desc">Priority (high first)</option>
+          <option value="due_then_priority">Due date, then priority</option>
+        </select>
+
+        {hasActiveFilters && (
+          <button
+            onClick={() => updatePrefs({ status: "all", clientId: "", priority: "" })}
+            className="text-xs text-muted hover:text-text transition-colors"
+          >
+            Clear filters
           </button>
-        ))}
+        )}
       </div>
 
-      {filtered.length === 0 ? (
+      {displayTasks.length === 0 ? (
         <div className="bg-surface-2 border border-border rounded-xl p-10 text-center">
-          <p className="text-sm text-muted">No tasks yet.</p>
+          <p className="text-sm text-muted">
+            {hasActiveFilters ? "No tasks match the current filters." : "No tasks yet."}
+          </p>
         </div>
       ) : (
         <div className="bg-surface-2 border border-border rounded-xl overflow-hidden">
@@ -291,9 +435,12 @@ export default function TasksClient({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((task, i) =>
+              {displayTasks.map((task, i) =>
                 editingId === task.id ? (
-                  <tr key={task.id} className={i < filtered.length - 1 ? "border-b border-border" : ""}>
+                  <tr
+                    key={task.id}
+                    className={i < displayTasks.length - 1 ? "border-b border-border" : ""}
+                  >
                     <td colSpan={6} className="px-4 py-3">
                       <form onSubmit={saveEdit} className="flex flex-wrap gap-2 items-end">
                         <div className="flex-1 min-w-[180px]">
@@ -301,7 +448,9 @@ export default function TasksClient({
                           <input
                             required
                             value={editForm.title}
-                            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, title: e.target.value })
+                            }
                             className={inputCls}
                           />
                         </div>
@@ -309,7 +458,9 @@ export default function TasksClient({
                           <label className="block text-xs text-muted mb-1">Notes</label>
                           <input
                             value={editForm.notes}
-                            onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, notes: e.target.value })
+                            }
                             className={inputCls}
                             placeholder="Optional"
                           />
@@ -318,12 +469,16 @@ export default function TasksClient({
                           <label className="block text-xs text-muted mb-1">Client</label>
                           <select
                             value={editForm.client_id}
-                            onChange={(e) => setEditForm({ ...editForm, client_id: e.target.value })}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, client_id: e.target.value })
+                            }
                             className={selectCls}
                           >
                             <option value="">AI Office</option>
                             {clients.map((c) => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -331,7 +486,9 @@ export default function TasksClient({
                           <label className="block text-xs text-muted mb-1">Priority</label>
                           <select
                             value={editForm.priority}
-                            onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, priority: e.target.value })
+                            }
                             className={selectCls}
                           >
                             <option value="low">Low</option>
@@ -343,7 +500,9 @@ export default function TasksClient({
                           <label className="block text-xs text-muted mb-1">Status</label>
                           <select
                             value={editForm.status}
-                            onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, status: e.target.value })
+                            }
                             className={selectCls}
                           >
                             <option value="todo">To Do</option>
@@ -356,7 +515,9 @@ export default function TasksClient({
                           <input
                             type="date"
                             value={editForm.due_date}
-                            onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, due_date: e.target.value })
+                            }
                             className={inputCls}
                           />
                         </div>
@@ -370,7 +531,7 @@ export default function TasksClient({
                           </button>
                           <button
                             type="button"
-                            onClick={cancelEdit}
+                            onClick={() => setEditingId(null)}
                             className="text-xs text-muted hover:text-text px-3 py-1.5"
                           >
                             Cancel
@@ -383,7 +544,7 @@ export default function TasksClient({
                   <tr
                     key={task.id}
                     className={`${
-                      i < filtered.length - 1 ? "border-b border-border" : ""
+                      i < displayTasks.length - 1 ? "border-b border-border" : ""
                     } hover:bg-surface transition-colors`}
                   >
                     <td className="px-4 py-3">
@@ -405,12 +566,14 @@ export default function TasksClient({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted">
-                      {task.due_date
-                        ? new Date(task.due_date + "T00:00:00").toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                          })
-                        : <span className="text-xs">—</span>}
+                      {task.due_date ? (
+                        new Date(task.due_date + "T00:00:00").toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })
+                      ) : (
+                        <span className="text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <button
