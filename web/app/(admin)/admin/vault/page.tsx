@@ -15,5 +15,6 @@ export default async function VaultPage() {
       .order("name"),
   ]);
 
-  return <VaultClient initialEntries={entries ?? []} clients={clients ?? []} />;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <VaultClient initialEntries={(entries ?? []) as any[]} clients={clients ?? []} />;
 }
