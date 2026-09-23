@@ -194,18 +194,39 @@ def investigate_one(ticket: dict) -> None:
     print(f"[{ticket_id}] done: {parsed.get('suggested_action')}", flush=True)
 
 
+def report_to_mission_control(status: str, message: str) -> None:
+    """Tell Dan's local Mission Control dashboard (dpc-task-monitor) how the
+    poll went. Best effort: the dashboard may not be running."""
+    try:
+        body = json.dumps({"job": "ai-office-ticket-investigator", "status": status,
+                           "message": message[:500]}).encode("utf-8")
+        urlreq.urlopen(urlreq.Request("http://127.0.0.1:7847/report", data=body, method="POST",
+                                      headers={"Content-Type": "application/json"}), timeout=5)
+    except Exception:
+        pass
+
+
 def main() -> int:
-    resp = http("GET", "/api/admin/investigations/pending")
+    try:
+        resp = http("GET", "/api/admin/investigations/pending")
+    except Exception as e:
+        report_to_mission_control("failure", f"Couldn't poll AI Office: {e}")
+        raise
     tickets = resp.get("tickets") or []
     if not tickets:
+        report_to_mission_control("success", "No new tickets")
         return 0
     print(f"found {len(tickets)} ticket(s) to investigate", flush=True)
+    failed = 0
     for t in tickets:
         try:
             investigate_one(t)
         except Exception as e:
+            failed += 1
             print(f"[{t.get('id')}] outer error: {e}", flush=True)
         time.sleep(1)
+    report_to_mission_control("failure" if failed else "success",
+                              f"Investigated {len(tickets)} ticket(s), {failed} failed")
     return 0
 
 
